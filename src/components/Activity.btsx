@@ -1,0 +1,96 @@
+import { useState } from 'octane'
+import Icon from './Icon.btsx'
+import TokenIcon from './TokenIcon.btsx'
+import { getNetwork } from '../lib/appkit/networks'
+import { getTransactionExplorerUrl } from '../lib/explorer'
+import { truncateAddress } from '../lib/amounts'
+import { exportTransactions, type TransactionRecord } from '../lib/appkit/journal'
+module
+  const previewRows = [
+    { id: 'preview-1', symbol: 'ETH', amount: '0.245', to: '0x71C7…b21E', network: 'ethereum' as const, time: '14:32', status: 'confirmed', label: 'Sent' },
+    { id: 'preview-2', symbol: 'USDC', amount: '1,250.00', to: '0x8dA4…7C19', network: 'ethereum' as const, time: '11:08', status: 'confirmed', label: 'Received' },
+    { id: 'preview-3', symbol: 'BTC', amount: '0.0124', to: 'bc1q9…j3sk', network: 'bitcoin' as const, time: 'Yesterday', status: 'confirmed', label: 'Sent' },
+  ];
+props { records, preview, expanded = false, onExpand }: { records: readonly TransactionRecord[]; preview: boolean; expanded?: boolean; onExpand: () => void }
+setup
+  const [filter, setFilter] = useState('all');
+  const [query, setQuery] = useState('');
+  const filtered = records.filter(record => (filter === 'all' || record.status === filter) && `${record.hash} ${record.to} ${record.symbol} ${record.network}`.toLowerCase().includes(query.toLowerCase()));
+  const shown = expanded ? filtered : filtered.slice(0, 4);
+  const samples = previewRows.filter(record => (filter === 'all' || record.status === filter) && `${record.to} ${record.symbol} ${record.network}`.toLowerCase().includes(query.toLowerCase()));
+
+section.activity-section(aria-labelledby="activity-heading")
+  .section-heading
+    .heading-label
+      Icon(name="activity" size={18})
+      h2#activity-heading #{expanded ? 'Transaction activity' : 'Recent activity'}
+      span.section-count #{preview ? '03' : records.length.toString().padStart(2, '0')}
+    if expanded
+      fragment
+        button.text-button(type="button" disabled={records.length === 0} onClick={() => exportTransactions(filtered)})
+          | Export JSON
+          Icon(name="receive" size={14})
+    else
+      fragment
+        button.text-button(type="button" onClick={onExpand})
+          | View all
+          Icon(name="arrow" size={14})
+  .activity-toolbar
+    .activity-filters(aria-label="Filter transactions")
+      each item in [{ key: 'all', label: 'All transactions' }, { key: 'confirmed', label: 'Confirmed' }, { key: 'pending', label: 'Pending' }, { key: 'reverted', label: 'Reverted' }] key item.key
+        fragment
+          button(type="button" className={filter === item.key ? 'active' : ''} aria-pressed={filter === item.key} onClick={() => setFilter(item.key)}) #{item.label}
+    .search-field
+      Icon(name="search" size={14})
+      input(aria-label="Search transactions" placeholder="Search activity" value={query} onInput={(event) => setQuery(event.currentTarget.value)})
+  .activity-table
+    .activity-table-head
+      span TRANSACTION
+      span AMOUNT
+      span NETWORK
+      span STATUS
+    if preview
+      fragment
+        each row in samples key row.id
+          fragment
+            .activity-row
+              .transaction-identity
+                span.transaction-direction
+                  Icon(name={row.label === 'Received' ? 'receive' : 'arrow'} size={16})
+                .transaction-label
+                  strong #{row.label} #{row.symbol}
+                  span #{row.to} · #{row.time}
+              .transaction-amount #{row.label === 'Received' ? '+' : '−'}#{row.amount}
+                span #{row.symbol}
+              span.activity-network #{getNetwork(row.network).name}
+              span.status-badge.confirmed
+                span.status-dot
+                | Confirmed
+    else
+      fragment
+        each row in shown key row.id
+          fragment
+            a.activity-row(href={getTransactionExplorerUrl(row.network, row.hash) ?? '#'} target="_blank" rel="noopener noreferrer")
+              .transaction-identity
+                span.transaction-direction
+                  Icon(name="arrow" size={16})
+                .transaction-label
+                  strong Sent #{row.symbol}
+                  span #{truncateAddress(row.to)} · #{new Date(row.created).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              .transaction-amount −#{row.amount}
+                span #{row.symbol}
+              span.activity-network #{getNetwork(row.network).name}
+              span(className={`status-badge ${row.status}`})
+                span.status-dot
+                | #{row.status === 'pending' ? 'Pending' : row.status === 'confirmed' ? 'Confirmed' : row.status === 'cancelled' ? 'Cancelled' : 'Reverted'}
+    if (preview && samples.length === 0) || (!preview && shown.length === 0)
+      fragment
+        .activity-empty
+          Icon(name="activity" size={24})
+          p #{query || filter !== 'all' ? 'No transactions match this filter.' : 'Your first transaction starts the story.'}
+          span #{query || filter !== 'all' ? 'Try a different search or status.' : 'Transfers made here will appear with their onchain status.'}
+  .activity-foot
+    span #{preview ? 'Illustrative transactions · preview data' : 'Transfers made in this workspace · stored on this device'}
+    span
+      Icon(name="shield" size={12})
+      | #{preview ? 'Explore the workspace' : 'Verified onchain receipts'}

@@ -1,0 +1,41 @@
+import Icon from './Icon.btsx'
+import { useQR } from '../hooks/use-qr'
+import { useCopy } from '../hooks/use-copy'
+import { getNetwork, type NetworkKey } from '../lib/appkit/networks'
+import { getAddressExplorerUrl } from '../lib/explorer'
+import { openWallet } from '../lib/appkit/store'
+import { errorMessage } from '../lib/amounts'
+props { network, address, notify }: { network: NetworkKey; address?: string; notify: (message: string) => void }
+setup
+  const qr = useQR(address);
+  const clipboard = useCopy();
+  const copy = () => { if (address) void clipboard.copy(address).catch(() => notify('Unable to access clipboard.')); };
+  const connect = () => { void openWallet(network).catch(error => notify(errorMessage(error))); };
+
+.receive-panel
+  if address
+    fragment
+      .qr-frame
+        if qr.image
+          fragment
+            img(src={qr.image} width="200" height="200" alt={`Receive address QR code on ${getNetwork(network).name}`})
+        else
+          fragment
+            p #{qr.error ?? 'Generating QR code…'}
+      p.receive-caption Your #{getNetwork(network).name} address
+      code.receive-address #{address}
+      button.primary-button(type="button" onClick={copy})
+        span #{clipboard.copied ? 'Address copied' : 'Copy wallet address'}
+        Icon(name={clipboard.copied ? 'check' : 'copy'})
+      a.text-button(href={getAddressExplorerUrl(network, address)} target="_blank" rel="noopener noreferrer") View account on explorer ↗
+      p.dialog-note Only send assets on #{getNetwork(network).name} to this address.
+  else
+    fragment
+      .receive-empty
+        .receive-symbol
+          Icon(name="receive" size={36})
+        h3 Your next destination.
+        p Connect a wallet to reveal your address and receive assets on #{getNetwork(network).name}.
+      button.primary-button(type="button" onClick={connect})
+        span Connect wallet to receive
+        Icon(name="right")

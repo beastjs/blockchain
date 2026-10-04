@@ -1,0 +1,54 @@
+import { useState } from 'octane'
+import { money } from '../lib/amounts'
+module
+  const chartPaths: Record<string, string> = {
+    '1D': 'M0 126L16 134 29 114 47 121 65 99 81 115 97 89 117 105 136 92 151 103 171 83 188 94 203 60 220 68 236 50 253 60 269 71 287 59 303 66 320 54 338 75 355 49 372 53 387 32 405 46 422 27 438 38 455 26 473 44 489 19 506 26 522 15 540 24 554 6 572 15 590 8 607 18 626 6 644 13 660 4',
+    '1W': 'M0 147L22 139 44 150 65 127 88 132 109 100 132 114 154 101 176 116 198 90 220 102 242 82 264 92 286 72 308 74 330 93 352 81 374 98 396 69 418 71 440 50 462 58 484 38 506 52 528 31 550 38 572 16 594 29 616 12 638 19 660 4',
+    '1M': 'M0 155L25 145 50 161 75 135 100 129 125 154 150 133 175 111 200 116 225 90 250 108 275 127 300 104 325 115 350 90 375 67 400 78 425 49 450 53 475 71 500 42 525 51 550 32 575 43 600 20 625 27 660 4',
+    '1Y': 'M0 163L30 151 60 161 90 133 120 143 150 101 180 116 210 134 240 100 270 108 300 84 330 105 360 77 390 86 420 58 450 71 480 40 510 64 540 38 570 45 600 20 630 31 660 4',
+  };
+  const chartLabels: Record<string, string[]> = { '1D': ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00'], '1W': ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'], '1M': ['01', '06', '11', '16', '21', '26'], '1Y': ['JAN', 'MAR', 'MAY', 'JUL', 'SEP', 'NOV'] };
+props { preview, total, hidden }: { preview: boolean; total: number; hidden: boolean }
+setup
+  const [period, setPeriod] = useState('1W');
+  const [hover, setHover] = useState(false);
+
+.chart-section
+  .chart-toolbar
+    .chart-legend
+      span.legend-dot
+      span Portfolio value
+      if preview
+        fragment
+          span.chart-preview Illustrative performance
+    .periods(aria-label="Chart period")
+      each item in ['1D', '1W', '1M', '1Y'] key item
+        fragment
+          button(type="button" className={period === item ? 'active' : ''} aria-pressed={period === item} onClick={() => setPeriod(item)}) #{item}
+  if preview
+    fragment
+      .chart-plot(onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)})
+        .chart-axis
+          span $26k
+          span $23k
+          span $20k
+        svg.portfolio-chart(viewBox="0 0 700 210" preserveAspectRatio="none" role="img" aria-label={`Illustrative portfolio performance over ${period}`})
+          path.chart-grid(d="M0 35H680M0 100H680M0 165H680")
+          path.chart-line(d={chartPaths[period]} transform="translate(0 26)")
+          circle.chart-end(cx="660" cy="30" r="4")
+          if hover && !hidden
+            fragment
+              path.chart-crosshair(d="M660 0v185")
+        if hover && !hidden
+          fragment
+            .chart-tooltip #{money(total)}
+        .chart-dates
+          each label in chartLabels[period] key label
+            fragment
+              span #{label}
+  else
+    fragment
+      .chart-empty
+        .chart-empty-line
+        p Your current portfolio. Live onchain.
+        span Historical performance is unavailable in this workspace.

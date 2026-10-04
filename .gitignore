@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.beast/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+.DS_Store
+
+artifacts/
+test-results/
+playwright-report/

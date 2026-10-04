@@ -1,0 +1,49 @@
+{
+  "name": "blockchain",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "rsbuild dev",
+    "build": "rsbuild build",
+    "preview": "rsbuild preview",
+    "start": "bun run server/index.ts",
+    "typecheck": "tsrx-tsc --noEmit",
+    "check": "bun run typecheck && bun run test && bun run build && bun run test:browser",
+    "test": "bun test ./tests/unit",
+    "test:browser": "playwright test"
+  },
+  "dependencies": {
+    "@beastjs/devtools": "^0.1.17",
+    "@octanejs/base-ui": "0.1.59",
+    "@reown/appkit": "1.8.19",
+    "@reown/appkit-adapter-bitcoin": "1.8.19",
+    "@reown/appkit-adapter-wagmi": "1.8.19",
+    "@scure/btc-signer": "^2",
+    "@wagmi/connectors": "6.2.0",
+    "@wagmi/core": "^2.21.2",
+    "beast-tsrx": "0.8.0",
+    "clsx": "^2.1.1",
+    "octane": "0.8.0",
+    "qrcode": "^1.5.4",
+    "tailwind-merge": "^3.6.0",
+    "viem": "^2",
+    "wagmi": "^2.19.5"
+  },
+  "devDependencies": {
+    "@octanejs/rsbuild-plugin": "0.1.58",
+    "@playwright/test": "^1.63.0",
+    "@rsbuild/core": "^2.2.2",
+    "@rsbuild/plugin-tailwindcss": "^2.0.3",
+    "@tsrx/typescript-plugin": "0.6.1",
+    "@types/bun": "^1.4.2",
+    "@types/node": "^26.2.0",
+    "@types/qrcode": "^1.5.6",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.9.3"
+  },
+  "overrides": {
+    "@wagmi/connectors": "6.2.0",
+    "@wagmi/core": "2.22.1"
+  }
+}

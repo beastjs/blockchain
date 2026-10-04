@@ -1,0 +1,131 @@
+import { useState } from 'octane'
+import Icon from './Icon.btsx'
+import TokenIcon from './TokenIcon.btsx'
+import { useSend } from '../hooks/use-send'
+import { getTokens } from '../lib/appkit/tokens'
+import { getNetwork, type NetworkKey } from '../lib/appkit/networks'
+import { openWallet } from '../lib/appkit/store'
+import { money, fiatToToken, compactBalance, errorMessage } from '../lib/amounts'
+import type { FiatCurrency } from '../lib/market-catalog'
+import { getTransactionExplorerUrl } from '../lib/explorer'
+import { formatFee } from '../lib/appkit/transactions'
+import type { TokenBalance } from '../hooks/use-network-tokens'
+props { network, initialSymbol, address, balances, hideBalances = false, currency = 'USD', priceFor, notify }: { network: NetworkKey; initialSymbol?: string; address?: string; balances: TokenBalance[]; hideBalances?: boolean; currency?: FiatCurrency; priceFor: (symbol: string) => number | undefined; notify: (message: string) => void }
+setup
+  const tokens = getTokens(network);
+  const [selection, setSelection] = useState(initialSymbol || tokens[0]!.symbol);
+  const [amount, setAmount] = useState('');
+  const [to, setTo] = useState('');
+  const [unit, setUnit] = useState('token');
+  const [inputError, setInputError] = useState('');
+  const tx = useSend();
+  const token = tokens.find(item => item.symbol === selection) ?? tokens[0]!;
+  const balance = balances.find(item => item.symbol === token.symbol);
+  const price = priceFor(token.symbol);
+  const estimatedFiat = amount && price ? (unit === 'fiat' ? Number(amount) : Number(amount) * price) : undefined;
+  const connect = () => { void openWallet(network).catch(error => notify(errorMessage(error))); };
+  const paste = async () => { try { setTo((await navigator.clipboard.readText()).trim()); } catch { notify('Clipboard unavailable. Paste the recipient address manually.'); } };
+  const review = () => {
+    setInputError('');
+    try {
+      const tokenAmount = unit === 'fiat' ? fiatToToken(amount, priceFor(token.symbol) ?? 0, token.decimals, currency) : amount;
+      void tx.review({ network, symbol: token.symbol, amount: tokenAmount, to });
+    } catch (error) { setInputError(errorMessage(error)); }
+  };
+  const changeToken = (value: string) => { setSelection(value); setAmount(''); setInputError(''); };
+
+.send-form
+  .amount-field
+    .field-heading
+      label(htmlFor="send-amount") You send
+      if address
+        fragment
+          span.balance-label #{hideBalances ? 'Balance: ••••' : balance?.error ? 'Balance unavailable' : `Balance: ${balance ? compactBalance(balance.formatted) : '…'}`}
+      else
+        fragment
+          span.balance-label Connect to see balance
+    .amount-row
+      input#send-amount(type="text" inputMode="decimal" placeholder="0.00" autoComplete="off" aria-describedby="amount-conversion" value={amount} onInput={(event) => setAmount(event.currentTarget.value)} disabled={tx.busy})
+      .asset-select
+        TokenIcon(symbol={token.symbol} small)
+        select(aria-label="Asset to send" value={token.symbol} onChange={(event) => changeToken(event.currentTarget.value)} disabled={tx.busy})
+          each item in tokens key item.symbol
+            fragment
+              option(value={item.symbol}) #{item.symbol}
+        Icon(name="down" size={13})
+    .amount-meta
+      span#amount-conversion #{estimatedFiat === undefined || !Number.isFinite(estimatedFiat) ? 'Enter an amount to get started' : `≈ ${money(estimatedFiat, currency)} ${currency}`}
+      button.unit-button(type="button" onClick={() => { setUnit(unit === 'fiat' ? 'token' : 'fiat'); setAmount(''); }} disabled={tx.busy || !price})
+        Icon(name="swap" size={12})
+        | #{unit === 'fiat' ? `${currency} amount` : 'Token amount'}
+  .recipient-field
+    .field-heading
+      label(htmlFor="recipient") Recipient
+      span Same network only
+    .recipient-row
+      input#recipient(type="text" placeholder={network === 'bitcoin' ? 'bc1… Bitcoin address' : '0x… Wallet address'} autoComplete="off" spellCheck={false} value={to} onInput={(event) => setTo(event.currentTarget.value)} disabled={tx.busy})
+      button.icon-button(type="button" aria-label="Paste recipient address" onClick={paste} disabled={tx.busy})
+        Icon(name="copy" size={16})
+  .execution-details
+    .detail-row
+      span Network fee
+      span Calculated at review
+    .detail-row
+      span Execution
+      span.wallet-signed
+        Icon(name="shield" size={13})
+        | Wallet signed
+  if tx.error || inputError
+    fragment
+      p.form-error(role="alert") #{tx.error || inputError}
+  if address
+    fragment
+      button.primary-button(type="button" disabled={!amount || !to || tx.busy} onClick={review})
+        span #{tx.phase === 'preparing' ? 'Preparing transaction…' : 'Review transaction'}
+        Icon(name={tx.phase === 'preparing' ? 'refresh' : 'right'} size={18} className={tx.phase === 'preparing' ? 'spinning' : ''})
+  else
+    fragment
+      button.primary-button(type="button" onClick={connect})
+        span Connect wallet to send
+        Icon(name="right" size={18})
+  p.transaction-note
+    Icon(name="shield" size={13})
+    | Your keys stay in your wallet.
+  if tx.phase === 'review' || tx.phase === 'signing'
+    fragment
+      dialog.review-dialog(ref={(element: HTMLDialogElement | null) => { if (element && !element.open) element.showModal(); }} aria-labelledby="review-title" onCancel={(event) => { event.preventDefault(); tx.reset(); }})
+        .dialog-heading
+          span.eyebrow TRANSACTION REVIEW
+          button.icon-button(type="button" aria-label="Close review" onClick={tx.reset} disabled={tx.busy})
+            Icon(name="close")
+        h2#review-title Ready to move.
+        p.review-amount #{tx.prepared?.amount}
+          span #{tx.prepared?.symbol}
+        .review-details
+          .detail-row
+            span Network
+            strong #{tx.prepared ? getNetwork(tx.prepared.network).name : ''}
+          .review-address
+            span From
+            code #{tx.prepared?.from}
+          .review-address
+            span Recipient
+            code #{tx.prepared?.to}
+          .detail-row
+            span Maximum network fee
+            strong #{tx.prepared ? formatFee(tx.prepared) : ''}
+        p.dialog-note #{network === 'bitcoin' ? 'Your wallet sets the final Bitcoin fee. Review its confirmation carefully.' : 'Approve this exact transfer in your wallet. The fee estimate expires after 90 seconds.'}
+        button.primary-button(type="button" onClick={tx.confirm} disabled={tx.busy})
+          span #{tx.phase === 'signing' ? 'Confirm in your wallet…' : 'Confirm & send'}
+          Icon(name={tx.busy ? 'refresh' : 'send'} className={tx.busy ? 'spinning' : ''})
+        button.text-button(type="button" onClick={tx.reset} disabled={tx.busy}) Back to editing
+  if tx.phase === 'broadcast'
+    fragment
+      .broadcast-status(role="status")
+        Icon(name="check" size={20})
+        strong Transaction broadcast
+        p Follow confirmation in your activity below.
+        a(href={tx.hash ? getTransactionExplorerUrl(network, tx.hash) ?? '#' : '#'} target="_blank" rel="noopener noreferrer")
+          | View on explorer
+          Icon(name="arrow" size={13})
+        button.text-button(type="button" onClick={() => { tx.reset(); setAmount(''); }}) New transaction

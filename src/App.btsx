@@ -1,0 +1,331 @@
+import { useEffect, useRef, useState } from 'octane'
+import Icon from './components/Icon.btsx'
+import TokenIcon from './components/TokenIcon.btsx'
+import PortfolioChart from './components/PortfolioChart.btsx'
+import SendPanel from './components/SendPanel.btsx'
+import ReceivePanel from './components/ReceivePanel.btsx'
+import SwapPanel from './components/SwapPanel.btsx'
+import Activity from './components/Activity.btsx'
+import { useAppKit } from './hooks/use-appkit'
+import { useCrypto } from './hooks/use-crypto'
+import { useNetworkTokens } from './hooks/use-network-tokens'
+import { useTransactions } from './hooks/use-transactions'
+import { usePreference } from './hooks/use-preference'
+import { useCurrency } from './hooks/use-currency'
+import { getNetwork, getNetworkByChainId, NETWORKS, type NetworkKey } from './lib/appkit/networks'
+import { getTokens, supportsFiatPricing } from './lib/appkit/tokens'
+import { FIAT_CURRENCIES } from './lib/market-catalog'
+import { getRuntime, openWallet } from './lib/appkit/store'
+import { PREVIEW_ASSETS, previewTotal } from './lib/preview'
+import { money, compactBalance, errorMessage, truncateAddress } from './lib/amounts'
+setup
+  const isDevServer = process.env.NODE_ENV === 'development';
+  const wallet = useAppKit();
+  const [network, setNetwork] = useState<NetworkKey>('ethereum');
+  const [tab, setTab] = useState('send');
+  const [sendSymbol, setSendSymbol] = useState('');
+  const [page, setPage] = useState('overview');
+  const [showPreview, setShowPreview] = useState(true);
+  const [hidden, setHidden] = usePreference('hide-balances', false);
+  const [showTestnets, setShowTestnets] = usePreference(isDevServer ? 'testnets.development' : 'testnets', isDevServer);
+  const [settings, setSettings] = useState(false);
+  const [currency, setCurrency] = useCurrency();
+  const [switchingNetwork, setSwitchingNetwork] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [toast, setToast] = useState('');
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const activeNetwork = getNetwork(network);
+  const walletNetwork = getNetworkByChainId(wallet.chainId, wallet.namespace);
+  const unsupportedNetwork = Boolean(wallet.evmAddress && wallet.namespace !== 'bip122' && wallet.chainId !== undefined && !walletNetwork);
+  const address = network === 'bitcoin' ? wallet.bitcoinAddress : wallet.evmAddress;
+  const preview = !wallet.evmAddress && !wallet.bitcoinAddress && showPreview;
+  const quotes = useCrypto(currency);
+  const balances = useNetworkTokens(network, unsupportedNetwork ? undefined : address, refreshKey);
+  const transactions = useTransactions();
+  const accountTransactions = transactions.filter(record => record.from.toLowerCase() === wallet.evmAddress?.toLowerCase() || record.from === wallet.bitcoinAddress);
+  const visibleNetworks = NETWORKS.filter(item => showTestnets || !item.testnet || (Boolean(address) && walletNetwork?.key === item.key));
+  const priceFor = (symbol: string) => supportsFiatPricing(network, isDevServer) ? quotes.getBySymbol(symbol)?.price : undefined;
+  const fiatRate = quotes.getRate();
+  const assets = preview ? PREVIEW_ASSETS : getTokens(network).map(token => {
+    const balance = balances.tokens.find(item => item.symbol === token.symbol);
+    return { symbol: token.symbol, name: token.name, network, amount: balance?.formatted ?? '0', price: priceFor(token.symbol), change: quotes.getBySymbol(token.symbol)?.change, color: token.color, spark: '', error: balance?.error, loading: Boolean(address) && !unsupportedNetwork && !balance };
+  });
+  const total = preview ? previewTotal * (fiatRate ?? 0) : assets.reduce((sum, asset) => sum + Number(asset.amount) * (asset.price ?? 0), 0);
+  const totalKnown = preview ? fiatRate !== undefined : Boolean(address) && !unsupportedNetwork && assets.every(asset => (Number(asset.amount) === 0 || asset.price !== undefined) && !('loading' in asset && asset.loading) && !('error' in asset && asset.error));
+  const totalDisplay = money(total, currency);
+  const change = preview ? 2.84 : undefined;
+  const completedCount = accountTransactions.filter(record => record.status === 'confirmed' || record.status === 'reverted').length;
+  const pendingCount = accountTransactions.filter(record => record.status === 'pending').length;
+  const notify = (message: string) => { setToast(message); clearTimeout(toastTimer.current); toastTimer.current = setTimeout(() => setToast(''), 4500); };
+  const connect = () => { void openWallet(network, address ? 'Account' : 'Connect').catch(error => notify(errorMessage(error))); };
+  const refresh = () => { setRefreshKey(value => value + 1); void quotes.refetch(); notify('Refreshing balances and market prices.'); };
+  const toggleHidden = () => { setHidden(!hidden); };
+  const switchNetwork = async (value: NetworkKey, symbol = '') => {
+    if (switchingNetwork) return;
+    setSwitchingNetwork(true);
+    try {
+      if (wallet.evmAddress || wallet.bitcoinAddress) { const { appKit } = await getRuntime(); await appKit.switchNetwork(getNetwork(value).chain, { throwOnFailure: true }); }
+      setNetwork(value); setSendSymbol(symbol);
+    } catch (error) { notify(errorMessage(error)); }
+    finally { setSwitchingNetwork(false); }
+  };
+  const disconnect = async () => { try { const { appKit } = await getRuntime(); await appKit.disconnect(); setSettings(false); notify('Wallet disconnected.'); } catch (error) { notify(errorMessage(error)); } };
+  useEffect(() => () => clearTimeout(toastTimer.current), []);
+  useEffect(() => {
+    const connected = wallet.namespace === 'bip122' ? wallet.bitcoinAddress : wallet.evmAddress;
+    const connectedNetwork = getNetworkByChainId(wallet.chainId, wallet.namespace);
+    if (connected && connectedNetwork) { setNetwork(connectedNetwork.key); setSendSymbol(''); }
+  }, [wallet.chainId, wallet.namespace, wallet.evmAddress, wallet.bitcoinAddress]);
+  useEffect(() => { if (!showTestnets && getNetwork(network).testnet && !address) setNetwork('ethereum'); }, [showTestnets, network, address]);
+  useEffect(() => { setRefreshKey(value => value + 1); }, [completedCount]);
+
+.app-shell
+  aside.sidebar
+    a.brand(href="#" aria-label="BLOCK home" onClick={(event) => { event.preventDefault(); setPage('overview'); }})
+      img(src="/mark.svg" alt="" width="29" height="29")
+      span BLOCK
+      span.brand-period .
+    .workspace-label
+      span Personal workspace
+      span.workspace-key 01
+    nav.primary-nav(aria-label="Main navigation")
+      each item in [{ key: 'overview', label: 'Overview', icon: 'grid' }, { key: 'activity', label: 'Transactions', icon: 'activity' }, { key: 'networks', label: 'Networks', icon: 'network' }] key item.key
+        fragment
+          button(type="button" className={page === item.key ? 'active' : ''} aria-current={page === item.key ? 'page' : undefined} aria-label={item.label} title={item.label} onClick={() => setPage(item.key)})
+            Icon(name={item.icon} size={17})
+            span #{item.label}
+            if item.key === 'activity' && pendingCount > 0
+              fragment
+                span.nav-count #{pendingCount}
+    .sidebar-bottom
+      .infrastructure-label
+        span.status-dot
+        span MULTICHAIN READY
+      .sidebar-network-count
+        strong #{visibleNetworks.length.toString().padStart(2, '0')}
+        span Networks.
+          br
+          | One workspace.
+      .sidebar-bottom-actions
+        button(type="button" aria-label="Preferences" title="Preferences" onClick={() => setSettings(true)})
+          Icon(name="settings" size={16})
+          span Preferences
+        a(href="https://docs.reown.com/appkit/overview" target="_blank" rel="noopener noreferrer" aria-label="AppKit documentation")
+          Icon(name="arrow" size={15})
+  .main-shell
+    header.topbar
+      .breadcrumbs
+        span Workspace
+        span.breadcrumb-slash /
+        strong #{page === 'overview' ? 'Overview' : page === 'activity' ? 'Transactions' : 'Networks'}
+      .topbar-actions
+        select.currency-select(aria-label="Display currency" value={currency} onChange={(event) => setCurrency(event.currentTarget.value)})
+          each code in FIAT_CURRENCIES key code
+            fragment
+              option(value={code}) #{code}
+        span.mode-label
+          span.status-dot
+          | #{unsupportedNetwork ? `UNSUPPORTED · ${wallet.chainId}` : `${activeNetwork.name} · ${activeNetwork.testnet ? 'TESTNET' : 'MAINNET'}`}
+        button.wallet-button(type="button" onClick={connect})
+          Icon(name="wallet" size={16})
+          span #{address ? truncateAddress(address) : wallet.status === 'loading' ? 'Loading wallet…' : 'Connect wallet'}
+          if address
+            fragment
+              span.wallet-connected-dot
+    main.workspace
+      if unsupportedNetwork
+        fragment
+          p.network-notice(role="status") Your wallet is on an unsupported network. Choose a supported network to load its assets.
+      if page === 'overview'
+        fragment
+          .dashboard-grid
+            .portfolio-column
+              section.portfolio-summary(aria-labelledby="portfolio-label")
+                .portfolio-heading
+                  span#portfolio-label #{preview ? 'Demo portfolio balance' : unsupportedNetwork ? 'Unsupported wallet network' : `${activeNetwork.name} portfolio balance`}
+                  .summary-actions
+                    button.icon-button(type="button" aria-label={hidden ? 'Show balances' : 'Hide balances'} aria-pressed={hidden} onClick={toggleHidden})
+                      Icon(name="eye" size={16})
+                    button.icon-button(type="button" aria-label="Refresh balances" onClick={refresh})
+                      Icon(name="refresh" size={15} className={balances.loading ? 'spinning' : ''})
+                .portfolio-value
+                  h2 #{hidden ? '••••••' : totalKnown ? totalDisplay.split('.')[0] : address || preview ? '—' : money(0, currency).split('.')[0]}
+                    span.value-decimals #{hidden || !totalKnown || !totalDisplay.includes('.') ? '' : `.${totalDisplay.split('.')[1]}`}
+                  if change !== undefined
+                    fragment
+                      .portfolio-change
+                        Icon(name="arrow" size={13})
+                        strong +#{change.toFixed(2)}%
+                        span past week
+                  else
+                    fragment
+                      .portfolio-change.neutral
+                        span #{balances.loading ? 'Reading onchain balances…' : activeNetwork.testnet ? isDevServer ? 'Mainnet-equivalent prices · development' : 'Test assets · fiat valuation unavailable' : address ? 'Live onchain balances' : 'Connect to load your portfolio'}
+                PortfolioChart(preview={preview} total={total} hidden={hidden})
+                .allocation-bar(aria-label="Portfolio allocation")
+                  each asset in assets key asset.symbol
+                    fragment
+                      span(style={{ backgroundColor: asset.color, width: `${total > 0 ? Math.max(0, Number(asset.amount) * (asset.price ?? 0) * (preview ? fiatRate ?? 0 : 1) / total * 100) : 100 / assets.length}%` }})
+                .allocation-labels
+                  each asset in assets key asset.symbol
+                    fragment
+                      span
+                        i(style={{ backgroundColor: asset.color }})
+                        | #{asset.symbol}
+                        strong #{total > 0 ? `${(Number(asset.amount) * (asset.price ?? 0) * (preview ? fiatRate ?? 0 : 1) / total * 100).toFixed(1)}%` : '—'}
+              section.assets-section(aria-labelledby="assets-heading")
+                .section-heading
+                  .heading-label
+                    h2#assets-heading Your assets
+                    span.section-count #{assets.length.toString().padStart(2, '0')}
+                  span.assets-scope #{preview ? 'Across networks · preview' : activeNetwork.name}
+                .assets-table
+                  .assets-table-head
+                    span ASSET
+                    span PRICE / 24H
+                    span HOLDINGS
+                    span VALUE
+                  each asset in assets key asset.symbol
+                    fragment
+                      button.asset-row(type="button" onClick={() => { void switchNetwork(asset.network, asset.symbol); setTab('send'); document.getElementById('transaction-heading')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }})
+                        .asset-identity
+                          TokenIcon(symbol={asset.symbol})
+                          .asset-name
+                            strong #{asset.name}
+                            span #{asset.symbol}
+                        .asset-price
+                          strong #{asset.price === undefined || (preview && fiatRate === undefined) ? '—' : money(asset.price * (preview ? fiatRate ?? 0 : 1), currency)}
+                          span(className={asset.change !== undefined && asset.change < 0 ? 'negative' : 'positive'}) #{asset.change === undefined ? '—' : `${asset.change >= 0 ? '+' : ''}${asset.change.toFixed(2)}%`}
+                        .asset-holdings
+                          strong(title={hidden ? undefined : asset.amount}) #{hidden ? '••••' : 'error' in asset && asset.error ? 'Unavailable' : !preview && (!address || unsupportedNetwork) ? '—' : 'loading' in asset && asset.loading ? '…' : compactBalance(asset.amount)}
+                          span #{asset.symbol}
+                        .asset-value
+                          strong #{hidden ? '••••' : asset.price === undefined || (preview && fiatRate === undefined) || ('error' in asset && asset.error) || ('loading' in asset && asset.loading) || (!preview && (!address || unsupportedNetwork)) ? '—' : money(Number(asset.amount) * asset.price * (preview ? fiatRate ?? 0 : 1), currency)}
+                          span.asset-mobile-holdings(title={hidden ? undefined : `${asset.amount} ${asset.symbol}`}) #{hidden ? '••••' : 'error' in asset && asset.error ? 'Unavailable' : !preview && (!address || unsupportedNetwork) ? '—' : 'loading' in asset && asset.loading ? '…' : `${compactBalance(asset.amount)} ${asset.symbol}`}
+                          if preview
+                            fragment
+                              svg.sparkline(viewBox="0 0 72 26" width="68" height="24" aria-hidden="true")
+                                polyline(points={asset.spark} fill="none" stroke={asset.change !== undefined && asset.change < 0 ? '#9c8b85' : '#b7d998'} strokeWidth="1.3")
+                if !preview && (quotes.error || quotes.fxError)
+                  fragment
+                    p.quote-error(role="status") #{quotes.error || quotes.fxError} Token holdings and transfers remain available.
+                elseif quotes.updated && fiatRate !== undefined
+                  fragment
+                    p.quote-source #{currency === 'USD' ? 'Market prices via CoinMarketCap' : `1 USD = ${fiatRate.toLocaleString('en-US', { maximumFractionDigits: 4 })} ${currency} · CoinMarketCap`}
+            aside.transaction-panel(aria-labelledby="transaction-heading")
+              .transaction-header
+                h2#transaction-heading Transact
+                span.transaction-version V.01
+              .transaction-tabs(role="tablist" aria-label="Transaction type")
+                each item in [{ key: 'send', label: 'Send', icon: 'arrow' }, { key: 'receive', label: 'Receive', icon: 'receive' }, { key: 'swap', label: 'Swap', icon: 'swap' }] key item.key
+                  fragment
+                    button(type="button" id={`tab-${item.key}`} role="tab" aria-selected={tab === item.key} aria-controls="transaction-content" tabIndex={tab === item.key ? 0 : -1} className={tab === item.key ? 'active' : ''} onClick={() => setTab(item.key)} onKeyDown={(event) => { if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') { event.preventDefault(); const items = ['send', 'receive', 'swap']; const next = items[(items.indexOf(tab) + (event.key === 'ArrowRight' ? 1 : 2)) % 3]!; setTab(next); document.getElementById(`tab-${next}`)?.focus(); } }})
+                      Icon(name={item.icon} size={14})
+                      span #{item.label}
+              .transaction-network
+                span Network
+                .network-select
+                  span.network-dot(style={{ backgroundColor: activeNetwork.color }})
+                  select(aria-label="Transaction network" value={network} disabled={switchingNetwork} onChange={(event) => { void switchNetwork(event.currentTarget.value as NetworkKey); }})
+                    each item in visibleNetworks key item.key
+                      fragment
+                        option(value={item.key}) #{item.name}#{item.testnet ? ' · Testnet' : ''}
+                  Icon(name="down" size={13})
+              #transaction-content(role="tabpanel" aria-labelledby={`tab-${tab}`})
+                if tab === 'send'
+                  fragment
+                    SendPanel(key={`${network}:${sendSymbol}:${currency}`} network={network} initialSymbol={sendSymbol} address={unsupportedNetwork ? undefined : address} balances={balances.tokens} hideBalances={hidden} currency={currency} priceFor={priceFor} notify={notify})
+                elseif tab === 'receive'
+                  fragment
+                    ReceivePanel(network={network} address={address} notify={notify})
+                else
+                  fragment
+                    SwapPanel(network={network} address={address} notify={notify})
+              .transaction-footer
+                .reown-mark
+                  span.reown-icon ◒
+                  | Powered by Reown
+                span 01 / #{tab === 'send' ? 'TRANSFER' : tab === 'receive' ? 'DEPOSIT' : 'EXCHANGE'}
+            .dashboard-activity
+              Activity(records={accountTransactions} preview={preview} onExpand={() => setPage('activity')})
+          .workspace-metrics
+            .workspace-metric
+              Icon(name="network" size={17})
+              strong #{NETWORKS.length.toString().padStart(2, '0')}
+              span Integrated networks
+            .workspace-metric
+              Icon(name="shield" size={17})
+              strong Self custody
+              span Always in your control
+            .workspace-metric
+              Icon(name="bolt" size={17})
+              strong Wallet signed
+              span Direct onchain execution
+      elseif page === 'activity'
+        fragment
+          .page-heading
+            .page-title
+              .eyebrow YOUR EXECUTION HISTORY
+              h1 Every move. On record.
+            span.preview-pill #{preview ? 'Workspace preview' : 'This device'}
+          Activity(records={accountTransactions} preview={preview} expanded onExpand={() => {}})
+      else
+        fragment
+          .page-heading
+            .page-title
+              .eyebrow #{`ONE WORKSPACE. ${visibleNetworks.length} NETWORKS.`}
+              h1 Choose your next move.
+          .network-cards
+            each item in visibleNetworks key item.key
+              fragment
+                article.network-card
+                  .network-card-top
+                    TokenIcon(symbol={item.short})
+                    span.network-type #{item.testnet ? 'TESTNET' : item.namespace === 'bip122' ? 'BITCOIN' : 'EVM'}
+                  h2 #{item.name}
+                  p #{item.testnet ? 'Test your workflow with test assets.' : item.key === 'bitcoin' ? 'Native Bitcoin transfers and onchain confirmations.' : `Native ${item.nativeSymbol}, USDC${item.key === 'sepolia' ? '' : ' and USDT'} transfers.`}
+                  .network-card-actions
+                    button.text-button(type="button" onClick={() => { void switchNetwork(item.key); setPage('overview'); }})
+                      | Transact
+                      Icon(name="right" size={16})
+                    a(href={item.chain.blockExplorers!.default.url} target="_blank" rel="noopener noreferrer" aria-label={`${item.name} block explorer`})
+                      Icon(name="arrow" size={16})
+      footer.workspace-footer
+        .footer-brand
+          img(src="/mark.svg" alt="" width="13" height="13")
+          | BLOCK / THE ONCHAIN TERMINAL
+        span Built for what’s next.
+    if settings
+      fragment
+        dialog.preferences-dialog(ref={(element: HTMLDialogElement | null) => { if (element && !element.open) element.showModal(); }} onCancel={() => setSettings(false)} aria-labelledby="preferences-heading")
+          .dialog-heading
+            span.eyebrow WORKSPACE PREFERENCES
+            button.icon-button(type="button" aria-label="Close preferences" onClick={() => setSettings(false)})
+              Icon(name="close")
+          h2#preferences-heading Make it yours.
+          .preference-row
+            .preference-label
+              strong Hide balances
+              span Keep portfolio amounts private.
+            input(type="checkbox" role="switch" aria-label="Hide balances" checked={hidden} onChange={(event) => setHidden(event.currentTarget.checked)})
+          .preference-row
+            .preference-label
+              strong Test networks
+              span Include Sepolia and Polygon Amoy in network selection.
+            input(type="checkbox" role="switch" aria-label="Show test networks" checked={showTestnets} onChange={(event) => setShowTestnets(event.currentTarget.checked)})
+          .preference-row
+            .preference-label
+              strong Wallet connection
+              span #{wallet.status === 'error' ? wallet.error : wallet.configured ? 'Reown AppKit configured' : 'Set PUBLIC_REOWN_PROJECT_ID in .env.local'}
+            span.status-dot
+          if wallet.evmAddress || wallet.bitcoinAddress
+            fragment
+              button.secondary-button(type="button" onClick={disconnect}) Disconnect wallet
+          button.primary-button(type="button" onClick={() => setSettings(false)}) Done
+    if toast
+      fragment
+        .toast(role="status")
+          Icon(name="info" size={17})
+          span #{toast}
+          button.icon-button(type="button" aria-label="Dismiss notification" onClick={() => setToast('')})
+            Icon(name="close" size={14})

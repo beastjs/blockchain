@@ -1,0 +1,40 @@
+import Icon from './Icon.btsx'
+import TokenIcon from './TokenIcon.btsx'
+import { getNetwork, type NetworkKey } from '../lib/appkit/networks'
+import { getRuntime, openWallet } from '../lib/appkit/store'
+import { errorMessage } from '../lib/amounts'
+props { network, address, notify }: { network: NetworkKey; address?: string; notify: (message: string) => void }
+setup
+  const unavailable = network === 'bitcoin' || getNetwork(network).testnet;
+  const open = async () => {
+    try {
+      if (!address) { await openWallet(network); return; }
+      const { appKit } = await getRuntime();
+      await appKit.switchNetwork(getNetwork(network).chain, { throwOnFailure: true });
+      await appKit.open({ view: 'Swap', namespace: 'eip155' });
+    } catch (error) { notify(errorMessage(error)); }
+  };
+
+.swap-panel
+  .swap-visual
+    TokenIcon(symbol="ETH")
+    Icon(name="swap" size={26})
+    TokenIcon(symbol="USDC")
+  h3 A new direction.
+  p Swap assets with live quotes and routes through your connected wallet.
+  .execution-details
+    .detail-row
+      span Routing
+      span Reown AppKit
+    .detail-row
+      span Pricing & slippage
+      span Reviewed before signing
+  if unavailable
+    fragment
+      p.form-error #{network === 'bitcoin' ? 'Swaps are available on EVM networks. Select Ethereum or Polygon.' : 'Swaps require a mainnet. Select Ethereum or Polygon.'}
+  button.primary-button(type="button" onClick={open} disabled={unavailable})
+    span #{address ? 'Open swap terminal' : 'Connect wallet to swap'}
+    Icon(name="right")
+  p.transaction-note
+    Icon(name="shield" size={13})
+    | Every swap requires your approval.
