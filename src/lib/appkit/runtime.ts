@@ -4,7 +4,7 @@ import { BitcoinAdapter } from '@reown/appkit-adapter-bitcoin'
 import * as core from '@wagmi/core'
 export { core }
 import { mainnet } from '@reown/appkit/networks'
-import { networks } from './networks'
+import { getNetworkByChainId, networks } from './networks'
 import { projectId, walletStore } from './store'
 
 const wagmiAdapter = new WalletNetworkAdapter({ projectId, networks, ssr: false })
@@ -28,7 +28,7 @@ let initialized = false
 export function initialize() {
   if (initialized) return
   initialized = true
-  let namespace: 'eip155' | 'bip122' = 'eip155'
+  let namespace = getNetworkByChainId(appKit.getChainId())?.namespace ?? 'eip155'
   const syncAccounts = () => {
     const evmAccount = core.getAccount(config)
     walletStore.update({

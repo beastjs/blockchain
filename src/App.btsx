@@ -6,6 +6,9 @@ import SendPanel from './components/SendPanel.btsx'
 import ReceivePanel from './components/ReceivePanel.btsx'
 import SwapPanel from './components/SwapPanel.btsx'
 import Activity from './components/Activity.btsx'
+import Checkout from './pages/Checkout.btsx'
+import Product from './pages/Product.btsx'
+import Settings from './pages/Settings.btsx'
 import { useAppKit } from './hooks/use-appkit'
 import { useCrypto } from './hooks/use-crypto'
 import { useNetworkTokens } from './hooks/use-network-tokens'
@@ -18,13 +21,17 @@ import { FIAT_CURRENCIES } from './lib/market-catalog'
 import { getRuntime, openWallet } from './lib/appkit/store'
 import { PREVIEW_ASSETS, previewTotal } from './lib/preview'
 import { money, compactBalance, errorMessage, truncateAddress } from './lib/amounts'
+module
+  const pagePaths: Record<string, string> = { overview: '/', activity: '/transactions', networks: '/networks', checkout: '/checkout', product: '/product', testing: '/settings' };
+  const pageFromPath = () => Object.keys(pagePaths).find(key => pagePaths[key] === window.location.pathname.replace(/\/$/, '') || (key === 'overview' && window.location.pathname === '/')) ?? 'overview';
 setup
   const isDevServer = process.env.NODE_ENV === 'development';
   const wallet = useAppKit();
   const [network, setNetwork] = useState<NetworkKey>('ethereum');
   const [tab, setTab] = useState('send');
   const [sendSymbol, setSendSymbol] = useState('');
-  const [page, setPage] = useState('overview');
+  const [page, setPage] = useState(pageFromPath);
+  const navigatePage = (next: string) => { if (next !== page) { window.history.pushState({}, '', pagePaths[next] ?? '/'); setPage(next); window.scrollTo({ top: 0 }); } };
   const [showPreview, setShowPreview] = useState(true);
   const [hidden, setHidden] = usePreference('hide-balances', false);
   const [showTestnets, setShowTestnets] = usePreference(isDevServer ? 'testnets.development' : 'testnets', isDevServer);
@@ -71,6 +78,8 @@ setup
   };
   const disconnect = async () => { try { const { appKit } = await getRuntime(); await appKit.disconnect(); setSettings(false); notify('Wallet disconnected.'); } catch (error) { notify(errorMessage(error)); } };
   useEffect(() => () => clearTimeout(toastTimer.current), []);
+  useEffect(() => { const onPopState = () => setPage(pageFromPath()); window.addEventListener('popstate', onPopState); return () => window.removeEventListener('popstate', onPopState); }, []);
+  useEffect(() => { document.title = `BLOCK — ${page === 'testing' ? 'Testing settings' : page === 'checkout' ? 'Checkout' : page === 'product' ? 'Turbofan engine' : page === 'activity' ? 'Transactions' : page === 'networks' ? 'Networks' : 'Onchain terminal'}`; }, [page]);
   useEffect(() => {
     const connected = wallet.namespace === 'bip122' ? wallet.bitcoinAddress : wallet.evmAddress;
     const connectedNetwork = getNetworkByChainId(wallet.chainId, wallet.namespace);
@@ -81,7 +90,7 @@ setup
 
 .app-shell
   aside.sidebar
-    a.brand(href="#" aria-label="BLOCK home" onClick={(event) => { event.preventDefault(); setPage('overview'); }})
+    a.brand(href="/" aria-label="BLOCK home" onClick={(event) => { event.preventDefault(); navigatePage('overview'); }})
       img(src="/mark.svg" alt="" width="29" height="29")
       span BLOCK
       span.brand-period .
@@ -89,9 +98,9 @@ setup
       span Personal workspace
       span.workspace-key 01
     nav.primary-nav(aria-label="Main navigation")
-      each item in [{ key: 'overview', label: 'Overview', icon: 'grid' }, { key: 'activity', label: 'Transactions', icon: 'activity' }, { key: 'networks', label: 'Networks', icon: 'network' }] key item.key
+      each item in [{ key: 'overview', label: 'Overview', icon: 'grid' }, { key: 'activity', label: 'Transactions', icon: 'activity' }, { key: 'networks', label: 'Networks', icon: 'network' }, { key: 'product', label: 'Featured product', icon: 'cube' }, { key: 'checkout', label: 'Checkout', icon: 'bag' }, { key: 'testing', label: 'Testing settings', icon: 'settings' }] key item.key
         fragment
-          button(type="button" className={page === item.key ? 'active' : ''} aria-current={page === item.key ? 'page' : undefined} aria-label={item.label} title={item.label} onClick={() => setPage(item.key)})
+          button(type="button" className={page === item.key ? 'active' : ''} aria-current={page === item.key ? 'page' : undefined} aria-label={item.label} title={item.label} onClick={() => navigatePage(item.key)})
             Icon(name={item.icon} size={17})
             span #{item.label}
             if item.key === 'activity' && pendingCount > 0
@@ -117,15 +126,22 @@ setup
       .breadcrumbs
         span Workspace
         span.breadcrumb-slash /
-        strong #{page === 'overview' ? 'Overview' : page === 'activity' ? 'Transactions' : 'Networks'}
+        strong #{page === 'overview' ? 'Overview' : page === 'activity' ? 'Transactions' : page === 'testing' ? 'Testing settings' : page === 'checkout' ? 'Checkout' : page === 'product' ? 'Featured product' : 'Networks'}
       .topbar-actions
-        select.currency-select(aria-label="Display currency" value={currency} onChange={(event) => setCurrency(event.currentTarget.value)})
-          each code in FIAT_CURRENCIES key code
-            fragment
-              option(value={code}) #{code}
-        span.mode-label
-          span.status-dot
-          | #{unsupportedNetwork ? `UNSUPPORTED · ${wallet.chainId}` : `${activeNetwork.name} · ${activeNetwork.testnet ? 'TESTNET' : 'MAINNET'}`}
+        if page === 'checkout' || page === 'product' || page === 'testing'
+          fragment
+            span.mode-label
+              span.status-dot
+              | #{page === 'testing' ? 'READ ONLY / MONITOR' : page === 'product' ? 'INTERACTIVE / 3D' : 'CHECKOUT / USD'}
+        else
+          fragment
+            select.currency-select(aria-label="Display currency" value={currency} onChange={(event) => setCurrency(event.currentTarget.value)})
+              each code in FIAT_CURRENCIES key code
+                fragment
+                  option(value={code}) #{code}
+            span.mode-label
+              span.status-dot
+              | #{unsupportedNetwork ? `UNSUPPORTED · ${wallet.chainId}` : `${activeNetwork.name} · ${activeNetwork.testnet ? 'TESTNET' : 'MAINNET'}`}
         button.wallet-button(type="button" onClick={connect})
           Icon(name="wallet" size={16})
           span #{address ? truncateAddress(address) : wallet.status === 'loading' ? 'Loading wallet…' : 'Connect wallet'}
@@ -133,7 +149,7 @@ setup
             fragment
               span.wallet-connected-dot
     main.workspace
-      if unsupportedNetwork
+      if unsupportedNetwork && page !== 'checkout' && page !== 'product'
         fragment
           p.network-notice(role="status") Your wallet is on an unsupported network. Choose a supported network to load its assets.
       if page === 'overview'
@@ -247,7 +263,7 @@ setup
                   | Powered by Reown
                 span 01 / #{tab === 'send' ? 'TRANSFER' : tab === 'receive' ? 'DEPOSIT' : 'EXCHANGE'}
             .dashboard-activity
-              Activity(records={accountTransactions} preview={preview} onExpand={() => setPage('activity')})
+              Activity(records={accountTransactions} preview={preview} onExpand={() => navigatePage('activity')})
           .workspace-metrics
             .workspace-metric
               Icon(name="network" size={17})
@@ -269,6 +285,15 @@ setup
               h1 Every move. On record.
             span.preview-pill #{preview ? 'Workspace preview' : 'This device'}
           Activity(records={accountTransactions} preview={preview} expanded onExpand={() => {}})
+      elseif page === 'checkout'
+        fragment
+          Checkout(onBack={() => navigatePage('overview')})
+      elseif page === 'testing'
+        fragment
+          Settings
+      elseif page === 'product'
+        fragment
+          Product
       else
         fragment
           .page-heading
@@ -285,7 +310,7 @@ setup
                   h2 #{item.name}
                   p #{item.testnet ? 'Test your workflow with test assets.' : item.key === 'bitcoin' ? 'Native Bitcoin transfers and onchain confirmations.' : `Native ${item.nativeSymbol}, USDC${item.key === 'sepolia' ? '' : ' and USDT'} transfers.`}
                   .network-card-actions
-                    button.text-button(type="button" onClick={() => { void switchNetwork(item.key); setPage('overview'); }})
+                    button.text-button(type="button" onClick={() => { void switchNetwork(item.key); navigatePage('overview'); }})
                       | Transact
                       Icon(name="right" size={16})
                     a(href={item.chain.blockExplorers!.default.url} target="_blank" rel="noopener noreferrer" aria-label={`${item.name} block explorer`})

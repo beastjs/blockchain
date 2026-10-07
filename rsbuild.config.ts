@@ -15,6 +15,10 @@ export default defineConfig(({ env }) => ({
     }
   },
   html: { template: './index.html' },
+  tools: { rspack: { module: { rules: [
+    // model-viewer's optional Lottie loader imports a runtime URL, rather than a bundled module.
+    { test: /model-viewer\.min\.js$/, parser: { importDynamic: false } }
+  ] } } },
   server: { setup: ({ server }) => { server.middlewares.use(marketMiddleware()) } },
   plugins: [
     pluginTailwindcss(),

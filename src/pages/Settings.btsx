@@ -1,0 +1,97 @@
+import { useState } from 'octane'
+import { NETWORKS, getNetwork, type NetworkKey } from '../lib/appkit/networks'
+import { readRelaySettings, validateRelaySettings, RELAY_SETTINGS_KEY, type RelaySettings } from '../lib/relay-monitor'
+import { useRelayMonitor } from '../hooks/use-relay-monitor'
+import { errorMessage } from '../lib/amounts'
+import { getTransactionExplorerUrl } from '../lib/explorer'
+import '../settings.css'
+setup
+  const [draft, setDraft] = useState(readRelaySettings);
+  const [active, setActive] = useState<RelaySettings | null>(null);
+  const [message, setMessage] = useState('');
+  const [hash, setHash] = useState('');
+  const [tracking, setTracking] = useState(false);
+  const monitor = useRelayMonitor(active);
+  const start = (event: Event) => {
+    event.preventDefault();
+    try {
+      const value = validateRelaySettings(draft);
+      try { localStorage.setItem(RELAY_SETTINGS_KEY, JSON.stringify(value)); setMessage('Settings saved on this device.'); } catch { setMessage('Monitoring started. Device storage is unavailable; settings are kept for this session.'); }
+      setDraft(value); setActive(value);
+    } catch (error) { setMessage(errorMessage(error)); }
+  };
+  const track = async (event: Event) => {
+    event.preventDefault(); setTracking(true);
+    try { await monitor.track(hash); setHash(''); setMessage('Transaction received by the RPC. Watching its receipt.'); }
+    catch (error) { setMessage(errorMessage(error)); }
+    finally { setTracking(false); }
+  };
+
+.settings-page
+  .page-heading
+    .page-title
+      .eyebrow TEMPORARY TESTING TOOLS
+      h1 Relay & destination.
+    span.preview-pill #{active ? 'Monitoring' : 'Stopped'}
+  p.settings-description Configure two addresses on the same EVM network. This read-only monitor never sends or forwards funds.
+  form.relay-settings(onSubmit={start})
+    .settings-field
+      label(htmlFor="relay-network") Monitoring network
+      select#relay-network(value={draft.network} onChange={(event) => setDraft({ ...draft, network: event.currentTarget.value as NetworkKey })})
+        each network in NETWORKS.filter(item => item.namespace === 'eip155') key network.key
+          fragment
+            option(value={network.key}) #{network.name}#{network.testnet ? ' · Testnet' : ''}
+    .settings-field
+      label(htmlFor="relay-address") Relay address
+      input#relay-address(type="text" required placeholder="0x…" spellCheck={false} autoComplete="off" value={draft.relay} onInput={(event) => setDraft({ ...draft, relay: event.currentTarget.value })})
+    .settings-field
+      label(htmlFor="destination-address") Destination address
+      input#destination-address(type="text" required placeholder="0x…" spellCheck={false} autoComplete="off" value={draft.destination} onInput={(event) => setDraft({ ...draft, destination: event.currentTarget.value })})
+    .settings-actions
+      button.primary-button(type="submit") #{active ? 'Save & restart monitoring' : 'Save & start monitoring'}
+      if active
+        fragment
+          button.secondary-button(type="button" onClick={() => setActive(null)}) Stop monitoring
+  if message
+    fragment
+      p.settings-message(role="status") #{message}
+  if active
+    fragment
+      section.relay-live(aria-labelledby="relay-live-heading")
+        .section-heading
+          h2#relay-live-heading Live transaction activity
+          span.assets-scope #{getNetwork(active.network).name}
+        p.settings-description #{monitor.updated ? `Last checked ${new Date(monitor.updated).toLocaleTimeString()} · Block ${monitor.block} · Polling every 3 seconds` : 'Connecting to the network…'}
+        .monitor-addresses
+          each role in ['relay', 'destination'] as const key role
+            fragment
+              article.monitor-address
+                h3 #{role === 'relay' ? 'Relay' : 'Destination'}
+                code #{active[role]}
+                p #{`${monitor.rows.filter(row => row.to.toLowerCase() === active[role].toLowerCase()).length} incoming · ${monitor.rows.filter(row => row.from.toLowerCase() === active[role].toLowerCase()).length} outgoing`}
+        form.track-hash(onSubmit={track})
+          .settings-field
+            label(htmlFor="monitor-hash") Watch a pending transaction by hash
+            input#monitor-hash(type="text" required placeholder="0x… transaction hash" value={hash} onInput={(event) => setHash(event.currentTarget.value)} spellCheck={false} autoComplete="off")
+          button.secondary-button(type="submit" disabled={tracking || !hash.trim()}) #{tracking ? 'Looking up…' : 'Watch transaction'}
+        p.settings-description Received means the RPC has observed a transfer. Processing means it is awaiting an onchain receipt. Completed means its receipt succeeded; Failed means it reverted. Relay service processing is not reported by the chain.
+        p.settings-description New blocks discover native transfers and supported USDC/USDT Transfer events from the block where monitoring starts. Pending transfers sent here are tracked automatically; paste a hash for external pending transfers. Internal native contract transfers and historical activity are not included. Completion is block inclusion, not finality.
+        if monitor.error
+          fragment
+            p.form-error(role="alert") #{`Monitor unavailable: ${monitor.error} Retrying every 3 seconds; the last successful data remains visible.`}
+        .monitor-feed(aria-live="polite" aria-relevant="additions text")
+          if !monitor.rows.length
+            fragment
+              p.monitor-empty Waiting for transactions involving the relay or destination.
+          each row in monitor.rows key row.id
+            fragment
+              article.monitor-transfer
+                .monitor-transfer-heading
+                  strong #{`${row.amount} ${row.symbol}`}
+                  span(className={`monitor-status ${row.status}`}) #{row.status === 'completed' ? 'Completed' : row.status === 'failed' ? 'Failed' : 'Processing'}
+                p #{`${row.from.toLowerCase() === active.relay.toLowerCase() ? 'Relay' : row.from.toLowerCase() === active.destination.toLowerCase() ? 'Destination' : 'External address'} → ${row.to.toLowerCase() === active.relay.toLowerCase() ? 'Relay' : row.to.toLowerCase() === active.destination.toLowerCase() ? 'Destination' : 'External address'}`}
+                code #{row.from}
+                code #{row.to}
+                .monitor-transfer-footer
+                  span #{`Received ${new Date(row.observed).toLocaleTimeString()}`}
+                  a(href={getTransactionExplorerUrl(active.network, row.hash) ?? undefined} target="_blank" rel="noopener noreferrer") View transaction ↗

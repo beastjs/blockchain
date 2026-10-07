@@ -6,6 +6,10 @@ All notable changes to `blockchain` will be recorded here.
 
 ### Added
 
+- Temporary `/settings` page for saved EVM relay/destination addresses, read-only three-second block/receipt monitoring, native and supported ERC-20 activity, pending hash tracking, and success/revert states.
+
+- `/product`, a featured turbofan engine with a lazily loaded 3D viewer, orbit/zoom controls, camera presets, auto-rotation, studio background switching, fullscreen, loading/retry states, GLB download, and original creator/license attribution.
+- `/checkout`, a responsive cart and checkout with original product illustrations, quantity controls, persisted carts, promo codes, delivery choices, address validation, card/USDC demo payment selection, order review, and confirmation. Workspace navigation now supports direct URLs and browser history.
 - Private CoinMarketCap v3 crypto quotes and v2 fiat conversions, shared server caching, eight display currencies, fiat transfer entry, and a Bun production server.
 - Development mainnet-equivalent valuation for Sepolia ETH, Amoy POL, and supported test tokens; explicit simulation labeling with real test-chain transactions.
 - Polygon Amoy with native POL, test USDC, and its explorer; dev servers show Sepolia and Amoy by default with a separate visibility preference.

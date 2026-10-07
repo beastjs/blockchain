@@ -1,0 +1,207 @@
+import { useEffect, useRef, useState } from 'octane'
+import type { ModelViewerElement } from '@google/model-viewer'
+import Icon from '../components/Icon.btsx'
+import { PRODUCT_MODEL_URL, PRODUCT_VIEWS } from '../lib/product-model'
+import '../product.css'
+setup
+  const host = useRef<HTMLDivElement | null>(null);
+  const stage = useRef<HTMLDivElement | null>(null);
+  const viewer = useRef<ModelViewerElement | null>(null);
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [progress, setProgress] = useState(0);
+  const [attempt, setAttempt] = useState(0);
+  const [activeView, setActiveView] = useState('perspective');
+  const [rotating, setRotating] = useState(false);
+  const [bladesSpinning, setBladesSpinning] = useState(true);
+  const [light, setLight] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [canFullscreen, setCanFullscreen] = useState(false);
+  const setView = (id: string) => {
+    const view = PRODUCT_VIEWS.find(item => item.id === id);
+    if (!view || !viewer.current) return;
+    viewer.current.resetTurntableRotation(); viewer.current.autoRotate = false; viewer.current.cameraTarget = 'auto auto auto'; viewer.current.cameraOrbit = view.orbit; viewer.current.fieldOfView = '30deg';
+    setActiveView(id); setRotating(false);
+  };
+  const toggleRotation = () => { if (viewer.current) { viewer.current.autoRotate = !rotating; setRotating(!rotating); setActiveView(''); } };
+  const toggleBlades = () => { if (viewer.current) { if (bladesSpinning) viewer.current.pause(); else viewer.current.play(); setBladesSpinning(!bladesSpinning); } };
+  const toggleFullscreen = async () => {
+    try { if (document.fullscreenElement) await document.exitFullscreen(); else if (stage.current) await stage.current.requestFullscreen(); setNotice(''); }
+    catch { setNotice('Fullscreen is unavailable in this browser. You can still explore the model here.'); }
+  };
+  useEffect(() => {
+    setCanFullscreen(Boolean(document.fullscreenEnabled));
+    const onFullscreen = () => setFullscreen(document.fullscreenElement === stage.current);
+    document.addEventListener('fullscreenchange', onFullscreen);
+    return () => document.removeEventListener('fullscreenchange', onFullscreen);
+  }, []);
+  useEffect(() => {
+    let cancelled = false;
+    let element: ModelViewerElement | undefined;
+    setStatus('loading'); setProgress(0); setRotating(false); setBladesSpinning(true); setActiveView('perspective');
+    const onLoad = () => { if (!cancelled) { setStatus('ready'); setProgress(100); } };
+    const onError = () => { if (!cancelled) setStatus('error'); };
+    const onProgress = (event: Event) => { if (!cancelled) setProgress(Math.round((event as CustomEvent<{ totalProgress: number }>).detail.totalProgress * 100)); };
+    const onCameraChange = (event: Event) => { if ((event as CustomEvent<{ source: string }>).detail.source === 'user-interaction') { setActiveView(''); } };
+    const load = async () => {
+      try {
+        // The bundled distribution preserves computed-symbol super access in the renderer.
+        await import('@google/model-viewer/dist/model-viewer.min.js');
+        if (cancelled || !host.current) return;
+        element = document.createElement('model-viewer');
+        element.setAttribute('alt', 'Interactive 3D model of a turbofan jet engine. Drag or use arrow keys to rotate; scroll or pinch to zoom.');
+        element.setAttribute('src', attempt ? `${PRODUCT_MODEL_URL}?retry=${attempt}` : PRODUCT_MODEL_URL);
+        element.setAttribute('camera-controls', '');
+        element.setAttribute('camera-orbit', PRODUCT_VIEWS[0].orbit);
+        element.setAttribute('field-of-view', '30deg');
+        element.setAttribute('min-camera-orbit', 'auto 10deg 35%');
+        element.setAttribute('max-camera-orbit', 'auto 170deg 200%');
+        element.setAttribute('touch-action', 'pan-y');
+        element.setAttribute('environment-image', 'neutral');
+        element.setAttribute('shadow-intensity', '1');
+        element.setAttribute('shadow-softness', '0.8');
+        element.setAttribute('exposure', '1.15');
+        element.setAttribute('interaction-prompt', 'none');
+        element.setAttribute('loading', 'eager');
+        element.setAttribute('animation-name', 'Fan spin');
+        element.setAttribute('autoplay', '');
+        element.setAttribute('rotation-per-second', '12deg');
+        element.addEventListener('load', onLoad); element.addEventListener('error', onError); element.addEventListener('progress', onProgress); element.addEventListener('camera-change', onCameraChange);
+        viewer.current = element;
+        host.current.appendChild(element);
+      } catch { if (!cancelled) setStatus('error'); }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+      if (element) { element.pause(); element.autoRotate = false; element.removeEventListener('load', onLoad); element.removeEventListener('error', onError); element.removeEventListener('progress', onProgress); element.removeEventListener('camera-change', onCameraChange); element.remove(); }
+      if (viewer.current === element) viewer.current = null;
+    };
+  }, [attempt]);
+
+.product-page
+  .product-page-heading
+    .eyebrow
+      span.status-dot
+      | OBJECTS OF INTEREST / 001
+    span.product-edition FEATURED OBJECT
+  .product-hero
+    .product-viewer-column
+      .product-stage(className={light ? 'light-stage' : ''} ref={(element: HTMLDivElement | null) => { stage.current = element; }} aria-label="Interactive product viewer")
+        .stage-grid(aria-hidden="true")
+        .stage-topline
+          span.stage-model-label
+            Icon(name="cube" size={14})
+            | TURBOFAN / 3D
+          span.stage-status(className={status === 'ready' ? 'ready' : ''} role="status")
+            span.status-dot
+            | #{status === 'ready' ? 'LIVE VIEW' : status === 'error' ? 'VIEWER UNAVAILABLE' : 'LOADING MODEL'}
+        .product-model-host(ref={(element: HTMLDivElement | null) => { host.current = element; }} data-testid="product-model-host")
+        if status === 'loading'
+          fragment
+            .product-loading(role="status" aria-live="polite")
+              .loading-model-icon
+                Icon(name="cube" size={31})
+              strong Preparing your perspective.
+              span Loading 3D model · #{progress}%
+              .model-progress(role="progressbar" aria-label="Model loading progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress})
+                span(style={{ width: `${progress}%` }})
+        elseif status === 'error'
+          fragment
+            .product-loading.product-error(role="alert")
+              Icon(name="cube" size={31})
+              strong The model couldn’t be displayed.
+              p Check your connection and try again. This viewer requires a browser with WebGL support.
+              button(type="button" onClick={() => setAttempt(value => value + 1)})
+                Icon(name="refresh" size={14})
+                | Try again
+        .stage-bottomline
+          span.stage-instruction
+            Icon(name="swap" size={13})
+            | Drag to rotate · Scroll to zoom
+          .stage-tools
+            button(type="button" className={light ? 'selected' : ''} aria-label="Use light background" title="Toggle studio background" aria-pressed={light} onClick={() => setLight(!light)})
+              span.background-swatch
+            if canFullscreen
+              fragment
+                button(type="button" aria-label={fullscreen ? 'Exit fullscreen' : 'View fullscreen'} title={fullscreen ? 'Exit fullscreen' : 'View fullscreen'} onClick={() => { void toggleFullscreen(); }})
+                  Icon(name="expand" size={15})
+      .product-viewer-toolbar
+        .product-view-presets(role="group" aria-label="Camera views")
+          each view in PRODUCT_VIEWS key view.id
+            fragment
+              button(type="button" disabled={status !== 'ready'} aria-pressed={activeView === view.id} className={activeView === view.id ? 'active' : ''} onClick={() => setView(view.id)}) #{view.label}
+        .product-camera-tools
+          button(type="button" disabled={status !== 'ready'} className={bladesSpinning ? 'active' : ''} aria-pressed={bladesSpinning} aria-label="Spin fan blades" title={bladesSpinning ? 'Pause fan blades' : 'Spin fan blades'} onClick={toggleBlades})
+            Icon(name={bladesSpinning ? 'pause' : 'play'} size={13})
+            span Fan
+          button(type="button" disabled={status !== 'ready'} className={rotating ? 'active' : ''} aria-pressed={rotating} aria-label="Auto-rotate model" title="Auto-rotate model" onClick={toggleRotation})
+            Icon(name={rotating ? 'pause' : 'play'} size={13})
+            span Auto-rotate
+          span.camera-tool-divider(aria-hidden="true")
+          button(type="button" disabled={status !== 'ready'} aria-label="Zoom out" title="Zoom out" onClick={() => viewer.current?.zoom(-1)})
+            Icon(name="minus" size={13})
+          button(type="button" disabled={status !== 'ready'} aria-label="Zoom in" title="Zoom in" onClick={() => viewer.current?.zoom(1)})
+            Icon(name="plus" size={13})
+          button(type="button" disabled={status !== 'ready'} aria-label="Reset model view" title="Reset model view" onClick={() => setView('perspective')})
+            Icon(name="refresh" size={13})
+      if notice
+        fragment
+          p.product-notice(role="status") #{notice}
+      .product-viewer-caption
+        span 360° OF POSSIBILITY
+        span Your perspective. Your control.
+    .product-details
+      .product-category-label
+        span PRODUCT SPOTLIGHT
+        span 001 — ENGINEERING
+      h1 Power, from
+        br
+        | another angle.
+      .product-title-line
+        h2 Turbofan engine
+        span.product-model-badge 3D MODEL
+      p.product-description A detailed look at the form behind flight. Explore the turbine assembly, from its sculpted fan blades to its layered mechanical structure.
+      .product-features
+        .product-feature
+          Icon(name="cube" size={18})
+          div
+            strong See the whole picture.
+            span Orbit freely. Get closer. Find a new angle.
+        .product-feature
+          Icon(name="eye" size={18})
+          div
+            strong Every surface, considered.
+            span Six materials, brought to life in studio lighting.
+      .product-asset-stats
+        .product-asset-stat
+          strong 20
+          span MESHES
+        .product-asset-stat
+          strong 06
+          span MATERIALS
+        .product-asset-stat
+          strong 11.4
+            small MB
+          span MODEL SIZE
+      a.product-download(href={PRODUCT_MODEL_URL} download="turbofan-engine.glb")
+        Icon(name="receive" size={16})
+        span Download 3D model
+        Icon(name="right" size={16})
+      p.product-download-note GLB format · Ready for your next project
+      .product-attribution
+        span CREATED BY
+        a(href="https://sketchfab.com/blenderbirb" target="_blank" rel="noopener noreferrer")
+          | blenderbirb
+          Icon(name="arrow" size={11})
+        p
+          a(href="https://sketchfab.com/3d-models/turbine-turbofan-engine-jet-engine-74c6aceed86b4a41aaad3b93afc3e262" target="_blank" rel="noopener noreferrer") Original model
+          |  · 
+          a(href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer") CC BY 4.0
+          |  · Fan animation added
+  .product-bottom-strip
+    .product-bottom-label
+      span.status-dot
+      | BUILT TO BE EXPLORED
+    p A new way to get acquainted. No installation. Just a different perspective.
+    span.product-strip-mark 01 / 360°

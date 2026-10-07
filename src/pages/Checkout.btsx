@@ -1,0 +1,325 @@
+import { useState } from 'octane'
+import Icon from '../components/Icon.btsx'
+import { PRODUCTS, checkoutTotals, formatPrice, initialCart, persistCart, readCart, type CartItem, type Delivery } from '../lib/checkout'
+import '../checkout.css'
+module
+  type Order = { name: string; email: string; address: string; city: string; region: string; postal: string; country: string; payment: string; delivery: Delivery; total: number; count: number; reference: string };
+props { onBack }: { onBack: () => void }
+setup
+  const [cart, setCart] = useState(readCart);
+  const [delivery, setDelivery] = useState<Delivery>('standard');
+  const [payment, setPayment] = useState('card');
+  const [promo, setPromo] = useState('');
+  const [discounted, setDiscounted] = useState(false);
+  const [promoMessage, setPromoMessage] = useState('');
+  const [review, setReview] = useState<Order | null>(null);
+  const [order, setOrder] = useState<Order | null>(null);
+  const count = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const totals = checkoutTotals(cart, delivery, discounted);
+  const updateCart = (next: CartItem[]) => { setCart(next); persistCart(next); };
+  const changeQuantity = (id: string, delta: number) => { updateCart(cart.map(item => item.id === id ? { ...item, quantity: Math.max(1, Math.min(10, item.quantity + delta)) } : item)); };
+  const applyPromo = () => { if (promo.trim().toUpperCase() === 'BLOCK10') { setDiscounted(true); setPromoMessage('BLOCK10 applied. A little something on us.'); } else { setPromoMessage('That code isn’t available. Try BLOCK10 for 10% off.'); } };
+  const reviewOrder = (event: Event) => {
+    event.preventDefault();
+    if (!cart.length) return;
+    const form = event.currentTarget as HTMLFormElement;
+    const data = new FormData(form);
+    const field = (name: string) => String(data.get(name) ?? '').trim();
+    for (const input of Array.from(form.querySelectorAll<HTMLInputElement>('input[required]'))) { input.setCustomValidity(input.value.trim() ? '' : 'Please fill out this field.'); }
+    if (!form.reportValidity()) return;
+    setReview({ name: `${field('firstName')} ${field('lastName')}`, email: field('email'), address: field('address'), city: field('city'), region: field('region'), postal: field('postal'), country: field('country'), payment, delivery, total: totals.total, count, reference: `BLK-${crypto.randomUUID().slice(0, 8).toUpperCase()}` });
+  };
+  const finishOrder = () => { if (review) { setOrder(review); setReview(null); updateCart([]); window.scrollTo({ top: 0, behavior: 'smooth' }); } };
+  const startAgain = () => { setOrder(null); updateCart(initialCart()); setDiscounted(false); setPromo(''); setPromoMessage(''); setDelivery('standard'); setPayment('card'); };
+
+.checkout-page
+  .checkout-intro
+    .checkout-intro-copy
+      .eyebrow
+        span.status-dot
+        | THE EVERYDAY COLLECTION
+      h1 A little upgrade. A lot to love.
+      p Thoughtfully chosen essentials. Just a few details, and they’re yours.
+    .checkout-demo-pill
+      Icon(name="info" size={13})
+      | Demo checkout
+  ol.checkout-steps(aria-label="Checkout progress")
+    li.complete
+      span.step-circle
+        Icon(name="check" size={12})
+      span Your cart
+    li.step-connector(aria-hidden="true")
+    li(className={order ? 'complete' : 'current'} aria-current={order ? undefined : 'step'})
+      span.step-circle
+        if order
+          fragment
+            Icon(name="check" size={12})
+        else
+          fragment
+            | 02
+      span Details & payment
+    li.step-connector(aria-hidden="true")
+    li(className={order ? 'current' : ''} aria-current={order ? 'step' : undefined})
+      span.step-circle 03
+      span Confirmation
+  if order
+    fragment
+      section.checkout-success(aria-labelledby="order-success-heading" role="status")
+        .success-icon
+          Icon(name="check" size={30})
+        span.eyebrow ALL SET. ALL YOURS.
+        h2#order-success-heading Looking good, #{order.name.split(' ')[0]}.
+        p Your demo order is complete. No payment was taken and no items will be shipped.
+        .success-reference
+          span ORDER REFERENCE
+          strong #{order.reference}
+        .success-details
+          .success-detail
+            Icon(name="bag" size={20})
+            div
+              span Order total
+              strong #{formatPrice(order.total)} · #{order.count} #{order.count === 1 ? 'item' : 'items'}
+          .success-detail
+            Icon(name="truck" size={20})
+            div
+              span Delivery details
+              strong #{order.address}, #{order.city}
+              small #{order.delivery === 'express' ? 'Express · 1–2 business days' : 'Standard · 3–5 business days'}
+          .success-detail
+            Icon(name="mail" size={20})
+            div
+              span Contact email
+              strong #{order.email}
+              small Demo only · no confirmation email is sent
+        .success-actions
+          button.primary-button(type="button" onClick={startAgain})
+            | Start a new cart
+            Icon(name="right" size={17})
+          button.checkout-back(type="button" onClick={onBack}) Back to workspace
+  elseif !cart.length
+    fragment
+      section.checkout-empty(aria-labelledby="empty-cart-heading")
+        .success-icon
+          Icon(name="bag" size={29})
+        h2#empty-cart-heading Room for something good.
+        p Your cart is empty. Add our everyday essentials to try the checkout.
+        button.primary-button(type="button" onClick={() => updateCart(initialCart())})
+          | Explore the collection
+          Icon(name="right" size={17})
+  else
+    fragment
+      .checkout-layout
+        .checkout-content
+          section.checkout-cart(aria-labelledby="cart-heading")
+            .checkout-section-heading
+              h2#cart-heading Your cart
+              span.checkout-count #{count.toString().padStart(2, '0')} #{count === 1 ? 'ITEM' : 'ITEMS'}
+              span.checkout-currency USD
+            .checkout-cart-items
+              each item in cart key item.id
+                fragment
+                  each product in PRODUCTS.filter(product => product.id === item.id) key product.id
+                    fragment
+                      article.checkout-item
+                        .checkout-product-image
+                          img(src={product.image} alt={product.name} width="100" height="100")
+                        .checkout-product-info
+                          span.product-category #{product.category}
+                          h3 #{product.name}
+                          p #{product.detail}
+                          span.product-stock
+                            span.status-dot
+                            | In stock
+                        .checkout-product-controls
+                          strong.product-price #{formatPrice(product.price * item.quantity)}
+                          .quantity-control(aria-label={`${product.name} quantity`})
+                            button(type="button" disabled={item.quantity === 1} aria-label={`Decrease ${product.name} quantity`} onClick={() => changeQuantity(item.id, -1)})
+                              Icon(name="minus" size={12})
+                            span(aria-live="polite") #{item.quantity}
+                            button(type="button" disabled={item.quantity === 10} aria-label={`Increase ${product.name} quantity`} onClick={() => changeQuantity(item.id, 1)})
+                              Icon(name="plus" size={12})
+                          button.remove-item(type="button" aria-label={`Remove ${product.name}`} onClick={() => updateCart(cart.filter(entry => entry.id !== item.id))})
+                            Icon(name="trash" size={12})
+                            | Remove
+            .cart-bottom-note
+              Icon(name="truck" size={15})
+              span #{totals.subtotal - totals.discount >= 20000 ? 'Your order qualifies for free standard shipping.' : `${formatPrice(20000 - totals.subtotal + totals.discount)} away from free standard shipping.`}
+              Icon(name="check" size={13})
+          form#checkout-form(onSubmit={reviewOrder})
+            section.checkout-form-section(aria-labelledby="delivery-heading")
+              .checkout-section-heading
+                span.section-number 01
+                h2#delivery-heading Delivery details
+                Icon(name="truck" size={16})
+              .checkout-fields
+                label.checkout-field.full-width
+                  span Email address
+                  input(type="email" name="email" placeholder="you@example.com" autoComplete="email" required maxLength={254} onInput={(event) => event.currentTarget.setCustomValidity('')})
+                label.checkout-field
+                  span First name
+                  input(name="firstName" placeholder="Alex" autoComplete="given-name" required maxLength={80} onInput={(event) => event.currentTarget.setCustomValidity('')})
+                label.checkout-field
+                  span Last name
+                  input(name="lastName" placeholder="Morgan" autoComplete="family-name" required maxLength={80} onInput={(event) => event.currentTarget.setCustomValidity('')})
+                label.checkout-field.full-width
+                  span Street address
+                  input(name="address" placeholder="Street address, apartment, suite" autoComplete="street-address" required maxLength={200} onInput={(event) => event.currentTarget.setCustomValidity('')})
+                label.checkout-field
+                  span City
+                  input(name="city" placeholder="San Francisco" autoComplete="address-level2" required maxLength={80} onInput={(event) => event.currentTarget.setCustomValidity('')})
+                label.checkout-field
+                  span State / province
+                  input(name="region" placeholder="California" autoComplete="address-level1" required maxLength={80} onInput={(event) => event.currentTarget.setCustomValidity('')})
+                label.checkout-field
+                  span Postal code
+                  input(name="postal" placeholder="94103" autoComplete="postal-code" required maxLength={20} onInput={(event) => event.currentTarget.setCustomValidity('')})
+                label.checkout-field
+                  span Country / region
+                  .checkout-select-wrap
+                    select(name="country" autoComplete="country-name" defaultValue="United States" aria-label="Country / region")
+                      each country in ['United States', 'Philippines', 'Canada', 'United Kingdom', 'Australia', 'Singapore'] key country
+                        fragment
+                          option(value={country}) #{country}
+                    Icon(name="down" size={13})
+              fieldset.checkout-delivery-options
+                legend Shipping method
+                label.checkout-choice(className={delivery === 'standard' ? 'selected' : ''})
+                  input(type="radio" name="delivery" value="standard" checked={delivery === 'standard'} onChange={() => setDelivery('standard')})
+                  .choice-label
+                    strong Standard delivery
+                    span 3–5 business days
+                  strong.choice-price #{totals.subtotal - totals.discount >= 20000 ? 'Free' : '$8.00'}
+                label.checkout-choice(className={delivery === 'express' ? 'selected' : ''})
+                  input(type="radio" name="delivery" value="express" checked={delivery === 'express'} onChange={() => setDelivery('express')})
+                  .choice-label
+                    strong Express delivery
+                    span 1–2 business days
+                  strong.choice-price $15.00
+            section.checkout-form-section.payment-section(aria-labelledby="payment-heading")
+              .checkout-section-heading
+                span.section-number 02
+                h2#payment-heading Payment method
+                Icon(name="lock" size={15})
+              fieldset.checkout-payment-options
+                legend.sr-only Payment method
+                label.payment-option(className={payment === 'card' ? 'selected' : ''})
+                  input(type="radio" name="payment" value="card" checked={payment === 'card'} onChange={() => setPayment('card')})
+                  Icon(name="card" size={19})
+                  span Credit or debit card
+                  span.card-logos VISA
+                label.payment-option(className={payment === 'crypto' ? 'selected' : ''})
+                  input(type="radio" name="payment" value="crypto" checked={payment === 'crypto'} onChange={() => setPayment('crypto')})
+                  Icon(name="wallet" size={19})
+                  span Pay with crypto
+                  span.crypto-payment-mark $
+              .checkout-payment-detail
+                if payment === 'card'
+                  fragment
+                    .demo-card-mark VISA
+                    div
+                      strong Demo Visa ending in 4242
+                      span Test card · no payment will be taken
+                    Icon(name="check" size={16})
+                else
+                  fragment
+                    .demo-usdc-mark $
+                    div
+                      strong #{(totals.total / 100).toFixed(2)} USDC on Ethereum
+                      span Demo payment · no wallet transaction is requested
+                    Icon(name="check" size={16})
+              p.checkout-billing
+                Icon(name="check" size={13})
+                | Billing address matches your delivery address.
+        aside.checkout-summary-column(aria-label="Order summary")
+          .checkout-summary
+            .summary-title
+              h2 Order summary
+              Icon(name="bag" size={18})
+            .summary-total-preview
+              span YOUR TOTAL
+              strong(data-testid="checkout-total" aria-live="polite") #{formatPrice(totals.total)}
+              p USD · #{count} #{count === 1 ? 'item' : 'items'} · all in one place
+            .summary-breakdown(aria-live="polite")
+              .summary-line
+                span Subtotal
+                strong #{formatPrice(totals.subtotal)}
+              if discounted
+                fragment
+                  .summary-line.discount-line
+                    span Discount (10%)
+                    strong −#{formatPrice(totals.discount)}
+              .summary-line
+                span Shipping
+                strong(className={totals.shipping === 0 ? 'free-shipping' : ''}) #{totals.shipping === 0 ? 'Free' : formatPrice(totals.shipping)}
+              .summary-line
+                span Estimated tax (8%)
+                strong #{formatPrice(totals.tax)}
+            .checkout-promo
+              label(for="checkout-promo-code")
+                Icon(name="tag" size={13})
+                | Have a promo code?
+              .promo-input-row
+                input#checkout-promo-code(placeholder="Enter code" value={promo} disabled={discounted} autoCapitalize="characters" aria-describedby="promo-feedback" onInput={(event) => setPromo(event.currentTarget.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); applyPromo(); } }})
+                button(type="button" onClick={discounted ? () => { setDiscounted(false); setPromo(''); setPromoMessage('Discount removed.'); } : applyPromo}) #{discounted ? 'Remove' : 'Apply'}
+              p#promo-feedback(className={discounted ? 'promo-feedback applied' : 'promo-feedback'} role="status") #{promoMessage || 'A little welcome gift: use BLOCK10 for 10% off.'}
+            .summary-grand-total
+              span Total
+              strong #{formatPrice(totals.total)}
+            button.checkout-submit(type="submit" form="checkout-form")
+              Icon(name="lock" size={15})
+              span Review order
+              Icon(name="right" size={17})
+            p.summary-payment-note Review your details before placing your order.
+            .summary-demo-note
+              Icon(name="info" size={13})
+              p This is a demo. Payments, delivery, and tax are simulated. No charge or shipment is created.
+          .checkout-benefits
+            .checkout-benefit
+              Icon(name="shield" size={19})
+              div
+                strong A little peace of mind
+                span Review every detail before confirming.
+            .checkout-benefit
+              Icon(name="return" size={19})
+              div
+                strong Simple by design
+                span Edit your cart. Choose your way to pay.
+          details.checkout-help
+            summary
+              span The finer details
+              Icon(name="plus" size={14})
+            p This example collection demonstrates a complete checkout. Standard shipping is free on discounted orders of $200 or more. Express shipping is $15. Tax is a fixed 8% estimate. Your address and payment choice stay in this page and are never submitted to a server.
+          button.checkout-back(type="button" onClick={onBack})
+            Icon(name="left" size={14})
+            | Back to workspace
+  if review
+    fragment
+      dialog.checkout-review(ref={(element: HTMLDialogElement | null) => { if (element && !element.open) element.showModal(); }} onCancel={() => setReview(null)} aria-labelledby="checkout-review-heading")
+        .review-heading
+          span.eyebrow ONE LAST LOOK
+          button.icon-button(type="button" aria-label="Close order review" onClick={() => setReview(null)})
+            Icon(name="close" size={18})
+        h2#checkout-review-heading Everything in order?
+        p.review-description Check your details, then place your demo order.
+        .review-order-details
+          .review-detail
+            span Deliver to
+            strong #{review.name}
+            p #{review.address}
+            p #{review.city}, #{review.region} #{review.postal}
+            p #{review.country}
+          .review-detail
+            span Contact
+            strong #{review.email}
+          .review-detail
+            span Delivery & payment
+            strong #{review.delivery === 'express' ? 'Express · 1–2 business days' : 'Standard · 3–5 business days'}
+            p #{review.payment === 'card' ? 'Demo Visa ···· 4242' : 'Demo USDC · Ethereum'}
+        .summary-grand-total
+          span #{review.count} #{review.count === 1 ? 'item' : 'items'} · total
+          strong #{formatPrice(review.total)}
+        button.checkout-submit(type="button" onClick={finishOrder})
+          span Place demo order
+          Icon(name="right" size={17})
+        button.review-edit(type="button" onClick={() => setReview(null)}) Edit my details
+        p.summary-payment-note No payment is taken. No email or shipment is sent.
