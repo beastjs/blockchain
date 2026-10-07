@@ -23,7 +23,7 @@ import { getRuntime, openWallet } from './lib/appkit/store'
 import { PREVIEW_ASSETS, previewTotal } from './lib/preview'
 import { compactBalance, errorMessage, truncateAddress } from './lib/amounts'
 module
-  const navigationItems = [{ key: 'overview', label: 'Overview', icon: 'chart' }, { key: 'activity', label: 'Transactions', icon: 'list' }, { key: 'networks', label: 'Networks', icon: 'globe' }, { key: 'product', label: 'Featured product', icon: 'feature' }, { key: 'checkout', label: 'Checkout', icon: 'cart' }, { key: 'testing', label: 'Testing settings', icon: 'settings' }] satisfies { key: string; label: string; icon: IconName }[];
+  const navigationItems = [{ key: 'overview', label: 'Overview', icon: 'chart' }, { key: 'activity', label: 'Transactions', icon: 'list' }, { key: 'networks', label: 'Networks', icon: 'globe' }, { key: 'product', label: 'Featured', icon: 'feature' }, { key: 'checkout', label: 'Checkout', icon: 'cart' }, { key: 'testing', label: 'Settings', icon: 'settings' }] satisfies { key: string; label: string; icon: IconName }[];
   const transactionTabs = [{ key: 'send', label: 'Send', icon: 'send' }, { key: 'receive', label: 'Receive', icon: 'receive' }, { key: 'swap', label: 'Swap', icon: 'swap' }] satisfies { key: string; label: string; icon: IconName }[];
   const pagePaths: Record<string, string> = { overview: '/', activity: '/transactions', networks: '/networks', checkout: '/checkout', product: '/product', testing: '/settings' };
   const pageFromPath = () => Object.keys(pagePaths).find(key => pagePaths[key] === window.location.pathname.replace(/\/$/, '') || (key === 'overview' && window.location.pathname === '/')) ?? 'overview';
@@ -164,7 +164,7 @@ setup
           Icon(name="settings" size={16})
           span Preferences
         a(href="https://docs.reown.com/appkit/overview" target="_blank" rel="noopener noreferrer" aria-label="AppKit documentation")
-          Icon(name="send" size={15})
+          Icon(name="send" size={10})
   .main-shell
     header.topbar
       .breadcrumbs

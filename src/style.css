@@ -895,7 +895,6 @@ h1 {
   color: var(--quiet);
 }
 .amount-field {
-  background: #111516;
   padding: 17px 16px 13px;
   border-radius: 5px;
 }
@@ -957,7 +956,7 @@ h1 {
   margin-top: 10px;
   padding: 10px 11px;
   border-radius: 4px;
-  background: #111516;
+  background: var(--bg);
 }
 .recipient-row input {
   width: 100%;
