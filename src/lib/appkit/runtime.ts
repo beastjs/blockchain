@@ -21,7 +21,7 @@ export const appKit = createAppKit({
     icons: [`${window.location.origin}/mark.svg`],
   },
   themeMode: 'dark',
-  themeVariables: { '--w3m-accent': '#c8f36a', '--w3m-border-radius-master': '2px', '--w3m-font-family': 'Inter, sans-serif' },
+  themeVariables: { '--w3m-accent': '#c8f36a', '--w3m-border-radius-master': '2px', '--w3m-font-family': 'OKXS, sans-serif' },
   features: { analytics: false, email: false, socials: false, swaps: true, onramp: false },
 })
 let initialized = false

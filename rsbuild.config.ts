@@ -15,7 +15,10 @@ export default defineConfig(({ env }) => ({
     }
   },
   html: { template: './index.html' },
-  tools: { rspack: { module: { rules: [
+  tools: {
+    // Public font URLs are served as-is; keep module resolution for other CSS assets.
+    cssLoader: { url: { filter: (url: string) => !url.startsWith('/fonts/') } },
+    rspack: { module: { rules: [
     // model-viewer's optional Lottie loader imports a runtime URL, rather than a bundled module.
     { test: /model-viewer\.min\.js$/, parser: { importDynamic: false } }
   ] } } },

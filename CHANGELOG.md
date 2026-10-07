@@ -6,6 +6,8 @@ All notable changes to `blockchain` will be recorded here.
 
 ### Added
 
+- Local OKXS regular and medium WOFF2 fonts from `public/fonts` for app typography and the wallet modal, with regular-face preloading.
+
 - UI icons now use the generated `src/lib/icons` SVG library across navigation, wallet controls, transfers, checkout, and product views. Remaining legacy shapes are SVG sources in the shared library.
 
 - Reference-inspired smooth wallet timeline with cumulative Total activity, Sent, and Received curves, period selection, date hover/keyboard tooltips, and Etherscan V2 history from the connected EVM address. Includes a private server endpoint, pagination, deduplication, caching, API request pacing, partial-history labels, and retry states.

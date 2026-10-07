@@ -217,10 +217,10 @@ setup
                         Icon(name="send" size={13})
                         strong +#{change.toFixed(2)}%
                         span past week
-                  else
-                    fragment
-                      .portfolio-change.neutral
-                        span.hidden #{balances.loading ? 'Reading onchain balances…' : activeNetwork.testnet ? isDevServer ? 'Mainnet-equivalent prices · development' : 'Test assets · fiat valuation unavailable' : address ? 'Live onchain balances' : 'Connect to load your portfolio'}
+                  // else
+                  //   fragment
+                  //     .portfolio-change.neutral
+                  //       span.hidden #{balances.loading ? 'Reading onchain balances…' : activeNetwork.testnet ? isDevServer ? 'Mainnet-equivalent prices · development' : 'Test assets · fiat valuation unavailable' : address ? 'Live onchain balances' : 'Connect to load your portfolio'}
                 PortfolioChart(preview={preview} hidden={hidden} network={network} address={unsupportedNetwork ? undefined : address})
                 .allocation-bar(aria-label="Portfolio allocation")
                   each asset in assetRows key asset.symbol
@@ -261,7 +261,8 @@ setup
                           span #{asset.symbol}
                         .asset-value
                           strong #{asset.valueDisplay}
-                          span.asset-mobile-holdings(title={hidden ? undefined : `${asset.amount} ${asset.symbol}`}) #{asset.mobileHoldings}
+                          span USD
+                          // span.asset-mobile-holdings(title={hidden ? undefined : `${asset.amount} ${asset.symbol}`}) #{asset.mobileHoldings}
                           if preview
                             fragment
                               svg.sparkline(viewBox="0 0 72 26" width="68" height="24" aria-hidden="true")
