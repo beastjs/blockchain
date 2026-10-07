@@ -6,7 +6,7 @@ test('workspace controls work without a wallet', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Transact', exact: true })).toBeVisible()
   await expect(page.getByText('Demo portfolio balance')).toBeVisible()
-  const chart = page.locator('.chart-line')
+  const chart = page.locator('.chart-line').first()
   const originalPath = await chart.getAttribute('d')
   await page.getByRole('button', { name: '1M', exact: true }).click()
   await expect(chart).not.toHaveAttribute('d', originalPath!)

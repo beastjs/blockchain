@@ -1,7 +1,15 @@
-import { MARKET_ASSETS, QUOTE_MAX_AGE, type CryptoQuote, type FiatCurrency, type MarketSnapshot } from './market-catalog'
+import { MARKET_ASSETS, QUOTE_MAX_AGE, QUOTE_REFRESH_MARGIN, type CryptoQuote, type FiatCurrency, type MarketSnapshot } from './market-catalog'
 export { QUOTE_MAX_AGE } from './market-catalog'
 export type { CryptoQuote } from './market-catalog'
 export interface QuoteState extends Partial<Omit<MarketSnapshot, 'data' | 'currency'>> { data: CryptoQuote[]; currency: FiatCurrency; loading: boolean; error?: string }
+// Refresh before the upstream timestamps expire, rather than measuring from fetch time.
+export function quoteRefreshDelay(snapshot: QuoteState, currency: FiatCurrency, now = Date.now()) {
+  if (snapshot.currency !== currency || snapshot.error || !snapshot.data.length) return 15_000
+  const timestamps = snapshot.data.map(quote => quote.updated)
+  if (snapshot.updated !== undefined) timestamps.push(snapshot.updated)
+  if (snapshot.fxUpdated !== undefined) timestamps.push(snapshot.fxUpdated)
+  return Math.max(5_000, Math.min(60_000, Math.min(...timestamps) + QUOTE_MAX_AGE - now - QUOTE_REFRESH_MARGIN))
+}
 const positive = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && value > 0
 
 export function createQuoteStore({ fetcher = (url: string, options: RequestInit) => fetch(url, options), now = () => Date.now() } = {}) {

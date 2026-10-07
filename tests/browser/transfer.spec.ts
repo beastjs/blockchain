@@ -420,3 +420,77 @@ test('large PHP portfolio values fit a mobile wallet layout', async ({ page }) =
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
   await page.screenshot({ path: 'artifacts/wallet-sepolia-php-mobile.png', fullPage: true })
 })
+
+
+test('nearly expired upstream quotes refresh before the portfolio balance disappears', async ({ page }) => {
+  await page.clock.install()
+  await mockWallet(page, { initialChainId: '0xaa36a7' })
+  let requests = 0
+  await page.route('**/api/market?**', route => {
+    const updated = Date.now()
+    const quoteUpdated = ++requests === 1 ? updated - 108_000 : updated
+    return route.fulfill({ json: {
+      currency: 'USD', rate: 1, updated, fxUpdated: updated,
+      data: [
+        { symbol: 'ETH', marketId: 1027, price: 2500, updated: quoteUpdated },
+        { symbol: 'USDC', marketId: 3408, price: 1, updated: quoteUpdated },
+      ],
+    } })
+  })
+  await connect(page)
+  await expect(page.locator('.portfolio-value h2')).toHaveText('$35,000.00')
+  await page.clock.fastForward(10_000)
+  await expect.poll(() => requests).toBeGreaterThanOrEqual(2)
+  await page.clock.fastForward(5_000)
+  // Trigger the same balance refresh that previously exposed expired prices.
+  await page.getByRole('button', { name: 'Refresh balances', exact: true }).click()
+  await expect(page.locator('.portfolio-value h2')).toHaveText('$35,000.00')
+  await expect(page.locator('.asset-row').filter({ hasText: 'Ethereum' }).locator('.asset-holdings strong')).toHaveText('10')
+})
+
+test('wallet timeline plots explorer activity, explores dates, and follows network changes', async ({ page }) => {
+  await mockWallet(page, { initialChainId: '0xaa36a7' })
+  await page.route('**/api/timeline?**', route => {
+    const url = new URL(route.request().url())
+    const updated = Date.now()
+    const events = url.searchParams.get('network') === 'amoy'
+      ? [{ hash: HASH, timestamp: updated - 1000, received: true, sent: false }]
+      : [
+        { hash: `0x${'1'.repeat(64)}`, timestamp: updated - 3 * 86_400_000, received: true, sent: false },
+        { hash: `0x${'2'.repeat(64)}`, timestamp: updated - 2 * 86_400_000, received: false, sent: true },
+        { hash: HASH, timestamp: updated - 1000, received: true, sent: true },
+      ]
+    return route.fulfill({ json: { address: ACCOUNT.toLowerCase(), network: url.searchParams.get('network'), events, updated, since: updated - 365 * 86_400_000, partial: false } })
+  })
+  await connect(page)
+  const counts = page.locator('.timeline-metric > strong')
+  await expect(counts).toHaveText(['3', '2', '2'])
+  await expect(page.locator('.wallet-timeline .chart-line')).toHaveCount(3)
+  const plot = page.getByRole('group', { name: 'Wallet activity timeline. Use left and right arrow keys to explore dates.' })
+  await plot.focus()
+  await plot.press('Home')
+  await expect(page.locator('.timeline-tooltip b')).toHaveText(['0', '0', '0'])
+  await plot.press('End')
+  await expect(page.locator('.timeline-tooltip b')).toHaveText(['3', '2', '2'])
+  await page.getByRole('button', { name: '1D', exact: true }).click()
+  await expect(counts).toHaveText(['1', '1', '1'])
+  await page.getByRole('combobox', { name: 'Transaction network' }).selectOption('amoy')
+  await expect(counts).toHaveText(['1', '0', '1'])
+  await page.getByRole('button', { name: 'Hide balances', exact: true }).click()
+  await expect(counts).toHaveText(['•••', '•••', '•••'])
+})
+
+test('wallet timeline errors are visible and a retry recovers', async ({ page }) => {
+  await mockWallet(page)
+  let fail = true
+  await page.route('**/api/timeline?**', route => {
+    const network = new URL(route.request().url()).searchParams.get('network')
+    return fail ? route.fulfill({ status: 503, json: { error: 'History service unavailable.' } }) : route.fulfill({ json: { address: ACCOUNT.toLowerCase(), network, events: [], updated: Date.now(), since: Date.now() - 365 * 86_400_000, partial: false } })
+  })
+  await connect(page)
+  await expect(page.getByText('History service unavailable.', { exact: true })).toBeVisible()
+  fail = false
+  await page.getByRole('button', { name: 'Retry history' }).click()
+  await expect(page.locator('.timeline-metric > strong')).toHaveText(['0', '0', '0'])
+  await expect(page.getByText('No activity in this period', { exact: true })).toBeVisible()
+})

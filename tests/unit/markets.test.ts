@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test'
-import { createQuoteStore, QUOTE_MAX_AGE } from '../../src/lib/markets'
+import { createQuoteStore, QUOTE_MAX_AGE, quoteRefreshDelay } from '../../src/lib/markets'
 import type { FiatCurrency } from '../../src/lib/market-catalog'
 
 const response = (payload: unknown, status = 200) => new Response(JSON.stringify(payload), { status, headers: { 'content-type': 'application/json' } })
@@ -95,5 +95,23 @@ describe('CoinMarketCap client quotes', () => {
     fetcher.mockImplementation(async () => response(snapshot()))
     await store.fetchQuotes()
     expect(store.getBySymbol('ETH')?.price).toBe(2500)
+  })
+})
+
+
+describe('quote refresh scheduling', () => {
+  test('refreshes nearly expired upstream prices before the portfolio loses its valuation', () => {
+    const time = 200_000
+    const state = { ...snapshot(time), loading: false, data: [{ ...snapshot(time).data[0]!, updated: time - 108_000 }] }
+    expect(quoteRefreshDelay(state, 'USD', time)).toBe(5_000)
+    expect(quoteRefreshDelay({ ...state, data: [{ ...state.data[0]!, updated: time - 80_000 }] }, 'USD', time)).toBe(25_000)
+    expect(quoteRefreshDelay({ ...snapshot(time), loading: false }, 'USD', time)).toBe(60_000)
+  })
+  test('also refreshes before the exchange rate expires and backs off on errors', () => {
+    const time = 200_000
+    const state = { ...snapshot(time, 'PHP', 56), loading: false, fxUpdated: time - 100_000 }
+    expect(quoteRefreshDelay(state, 'PHP', time)).toBe(5_000)
+    expect(quoteRefreshDelay({ ...state, error: 'offline' }, 'PHP', time)).toBe(15_000)
+    expect(quoteRefreshDelay(state, 'USD', time)).toBe(15_000)
   })
 })

@@ -52,6 +52,26 @@ describe('CoinMarketCap server integration', () => {
     expect((await service.getSnapshot('USD')).data[0]!.updated).toBe(time)
     expect(fetcher).toHaveBeenCalledTimes(3)
   })
+  test('refreshes nearly expired upstream prices even inside the server cache TTL', async () => {
+    let time = NOW
+    const fetcher = mock(async () => response(quotes(time)))
+    fetcher.mockResolvedValueOnce(response(quotes(NOW - 100_000)))
+    const service = createMarketService({ apiKey: () => 'key', now: () => time, fetcher })
+    expect((await service.getSnapshot('USD')).data[0]!.updated).toBe(NOW - 100_000)
+    time += 10_000
+    expect((await service.getSnapshot('USD')).data[0]!.updated).toBe(time)
+    expect(fetcher).toHaveBeenCalledTimes(2)
+  })
+  test('refreshes nearly expired FX independently of fresh crypto prices', async () => {
+    let time = NOW
+    let fxCalls = 0
+    const fetcher = mock(async (url: string) => response(url.includes('/cryptocurrency/') ? quotes(time) : fx(++fxCalls === 1 ? NOW - 100_000 : time)))
+    const service = createMarketService({ apiKey: () => 'key', now: () => time, fetcher })
+    expect((await service.getSnapshot('PHP')).fxUpdated).toBe(NOW - 100_000)
+    time += 10_000
+    expect((await service.getSnapshot('PHP')).fxUpdated).toBe(time)
+    expect(fetcher).toHaveBeenCalledTimes(3)
+  })
   test('an FX outage preserves USD crypto quotes while exposing no fiat conversion', async () => {
     const service = createMarketService({ ...options(), fetcher: async url => response(url.includes('/cryptocurrency/') ? quotes() : {}, url.includes('/cryptocurrency/') ? 200 : 403) })
     const result = await service.getSnapshot('PHP')

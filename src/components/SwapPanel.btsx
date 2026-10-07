@@ -1,4 +1,4 @@
-import Icon from './Icon.btsx'
+import Icon from '../lib/icons/Icon.btsx'
 import TokenIcon from './TokenIcon.btsx'
 import { getNetwork, type NetworkKey } from '../lib/appkit/networks'
 import { getRuntime, openWallet } from '../lib/appkit/store'
@@ -34,7 +34,7 @@ setup
       p.form-error #{network === 'bitcoin' ? 'Swaps are available on EVM networks. Select Ethereum or Polygon.' : 'Swaps require a mainnet. Select Ethereum or Polygon.'}
   button.primary-button(type="button" onClick={open} disabled={unavailable})
     span #{address ? 'Open swap terminal' : 'Connect wallet to swap'}
-    Icon(name="right")
+    Icon(name="arrow-right")
   p.transaction-note
-    Icon(name="shield" size={13})
+    Icon(name="shield-check-outline" size={13})
     | Every swap requires your approval.

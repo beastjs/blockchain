@@ -1,5 +1,5 @@
 import { useState } from 'octane'
-import Icon from '../components/Icon.btsx'
+import Icon from '../lib/icons/Icon.btsx'
 import { PRODUCTS, checkoutTotals, formatPrice, initialCart, persistCart, readCart, type CartItem, type Delivery } from '../lib/checkout'
 import '../checkout.css'
 module
@@ -75,7 +75,7 @@ setup
           strong #{order.reference}
         .success-details
           .success-detail
-            Icon(name="bag" size={20})
+            Icon(name="cart" size={20})
             div
               span Order total
               strong #{formatPrice(order.total)} · #{order.count} #{order.count === 1 ? 'item' : 'items'}
@@ -94,18 +94,18 @@ setup
         .success-actions
           button.primary-button(type="button" onClick={startAgain})
             | Start a new cart
-            Icon(name="right" size={17})
+            Icon(name="arrow-right" size={17})
           button.checkout-back(type="button" onClick={onBack}) Back to workspace
   elseif !cart.length
     fragment
       section.checkout-empty(aria-labelledby="empty-cart-heading")
         .success-icon
-          Icon(name="bag" size={29})
+          Icon(name="cart" size={29})
         h2#empty-cart-heading Room for something good.
         p Your cart is empty. Add our everyday essentials to try the checkout.
         button.primary-button(type="button" onClick={() => updateCart(initialCart())})
           | Explore the collection
-          Icon(name="right" size={17})
+          Icon(name="arrow-right" size={17})
   else
     fragment
       .checkout-layout
@@ -180,7 +180,7 @@ setup
                       each country in ['United States', 'Philippines', 'Canada', 'United Kingdom', 'Australia', 'Singapore'] key country
                         fragment
                           option(value={country}) #{country}
-                    Icon(name="down" size={13})
+                    Icon(name="chevron-down" size={13})
               fieldset.checkout-delivery-options
                 legend Shipping method
                 label.checkout-choice(className={delivery === 'standard' ? 'selected' : ''})
@@ -234,7 +234,7 @@ setup
           .checkout-summary
             .summary-title
               h2 Order summary
-              Icon(name="bag" size={18})
+              Icon(name="cart" size={18})
             .summary-total-preview
               span YOUR TOTAL
               strong(data-testid="checkout-total" aria-live="polite") #{formatPrice(totals.total)}
@@ -268,14 +268,14 @@ setup
             button.checkout-submit(type="submit" form="checkout-form")
               Icon(name="lock" size={15})
               span Review order
-              Icon(name="right" size={17})
+              Icon(name="arrow-right" size={17})
             p.summary-payment-note Review your details before placing your order.
             .summary-demo-note
               Icon(name="info" size={13})
               p This is a demo. Payments, delivery, and tax are simulated. No charge or shipment is created.
           .checkout-benefits
             .checkout-benefit
-              Icon(name="shield" size={19})
+              Icon(name="shield-check-outline" size={19})
               div
                 strong A little peace of mind
                 span Review every detail before confirming.
@@ -320,6 +320,6 @@ setup
           strong #{formatPrice(review.total)}
         button.checkout-submit(type="button" onClick={finishOrder})
           span Place demo order
-          Icon(name="right" size={17})
+          Icon(name="arrow-right" size={17})
         button.review-edit(type="button" onClick={() => setReview(null)}) Edit my details
         p.summary-payment-note No payment is taken. No email or shipment is sent.

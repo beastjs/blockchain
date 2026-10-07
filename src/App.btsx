@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'octane'
-import Icon from './components/Icon.btsx'
+import { useEffect, useMemo, useRef, useState } from 'octane'
+import Icon from './lib/icons/Icon.btsx'
+import type { IconName } from './lib/icons/icons'
 import TokenIcon from './components/TokenIcon.btsx'
 import PortfolioChart from './components/PortfolioChart.btsx'
 import SendPanel from './components/SendPanel.btsx'
@@ -20,8 +21,10 @@ import { getTokens, supportsFiatPricing } from './lib/appkit/tokens'
 import { FIAT_CURRENCIES } from './lib/market-catalog'
 import { getRuntime, openWallet } from './lib/appkit/store'
 import { PREVIEW_ASSETS, previewTotal } from './lib/preview'
-import { money, compactBalance, errorMessage, truncateAddress } from './lib/amounts'
+import { compactBalance, errorMessage, truncateAddress } from './lib/amounts'
 module
+  const navigationItems = [{ key: 'overview', label: 'Overview', icon: 'chart' }, { key: 'activity', label: 'Transactions', icon: 'list' }, { key: 'networks', label: 'Networks', icon: 'globe' }, { key: 'product', label: 'Featured product', icon: 'feature' }, { key: 'checkout', label: 'Checkout', icon: 'cart' }, { key: 'testing', label: 'Testing settings', icon: 'settings' }] satisfies { key: string; label: string; icon: IconName }[];
+  const transactionTabs = [{ key: 'send', label: 'Send', icon: 'send' }, { key: 'receive', label: 'Receive', icon: 'receive' }, { key: 'swap', label: 'Swap', icon: 'swap' }] satisfies { key: string; label: string; icon: IconName }[];
   const pagePaths: Record<string, string> = { overview: '/', activity: '/transactions', networks: '/networks', checkout: '/checkout', product: '/product', testing: '/settings' };
   const pageFromPath = () => Object.keys(pagePaths).find(key => pagePaths[key] === window.location.pathname.replace(/\/$/, '') || (key === 'overview' && window.location.pathname === '/')) ?? 'overview';
 setup
@@ -49,20 +52,55 @@ setup
   const quotes = useCrypto(currency);
   const balances = useNetworkTokens(network, unsupportedNetwork ? undefined : address, refreshKey);
   const transactions = useTransactions();
-  const accountTransactions = transactions.filter(record => record.from.toLowerCase() === wallet.evmAddress?.toLowerCase() || record.from === wallet.bitcoinAddress);
+  const accountTransactions = useMemo(() => {
+    const evmAddress = wallet.evmAddress?.toLowerCase();
+    return transactions.filter(record => record.from.toLowerCase() === evmAddress || record.from === wallet.bitcoinAddress);
+  }, [transactions, wallet.evmAddress, wallet.bitcoinAddress]);
+  const transactionCounts = useMemo(() => {
+    let completed = 0;
+    let pending = 0;
+    for (const record of accountTransactions) {
+      if (record.status === 'confirmed' || record.status === 'reverted') completed++;
+      else if (record.status === 'pending') pending++;
+    }
+    return { completed, pending };
+  }, [accountTransactions]);
   const visibleNetworks = NETWORKS.filter(item => showTestnets || !item.testnet || (Boolean(address) && walletNetwork?.key === item.key));
-  const priceFor = (symbol: string) => supportsFiatPricing(network, isDevServer) ? quotes.getBySymbol(symbol)?.price : undefined;
+  const fiatPricing = supportsFiatPricing(network, isDevServer);
+  const priceFor = (symbol: string) => fiatPricing ? quotes.getBySymbol(symbol)?.price : undefined;
+  const currencyFormatter = useMemo(() => new Intl.NumberFormat('en-US', { style: 'currency', currency }), [currency]);
   const fiatRate = quotes.getRate();
   const assets = preview ? PREVIEW_ASSETS : getTokens(network).map(token => {
     const balance = balances.tokens.find(item => item.symbol === token.symbol);
-    return { symbol: token.symbol, name: token.name, network, amount: balance?.formatted ?? '0', price: priceFor(token.symbol), change: quotes.getBySymbol(token.symbol)?.change, color: token.color, spark: '', error: balance?.error, loading: Boolean(address) && !unsupportedNetwork && !balance };
+    const quote = quotes.getBySymbol(token.symbol);
+    return { symbol: token.symbol, name: token.name, network, amount: balance?.formatted ?? '0', price: fiatPricing ? quote?.price : undefined, change: quote?.change, color: token.color, spark: '', error: balance?.error, loading: Boolean(address) && !unsupportedNetwork && !balance };
   });
   const total = preview ? previewTotal * (fiatRate ?? 0) : assets.reduce((sum, asset) => sum + Number(asset.amount) * (asset.price ?? 0), 0);
   const totalKnown = preview ? fiatRate !== undefined : Boolean(address) && !unsupportedNetwork && assets.every(asset => (Number(asset.amount) === 0 || asset.price !== undefined) && !('loading' in asset && asset.loading) && !('error' in asset && asset.error));
-  const totalDisplay = money(total, currency);
+  const totalDisplay = currencyFormatter.format(total);
+  const [totalWhole, totalFraction] = totalDisplay.split('.');
+  const assetRows = assets.map(asset => {
+    const price = asset.price === undefined || (preview && fiatRate === undefined) ? undefined : asset.price * (preview ? fiatRate ?? 0 : 1);
+    const value = Number(asset.amount) * (price ?? 0);
+    const unavailable = !preview && (!address || unsupportedNetwork);
+    const failed = 'error' in asset && Boolean(asset.error);
+    const loading = 'loading' in asset && asset.loading;
+    const holdings = hidden ? '••••' : failed ? 'Unavailable' : unavailable ? '—' : loading ? '…' : compactBalance(asset.amount);
+    const allocation = total > 0 ? value / total * 100 : undefined;
+    return {
+      ...asset,
+      holdings,
+      mobileHoldings: hidden || unavailable || failed || loading ? holdings : `${holdings} ${asset.symbol}`,
+      priceDisplay: price === undefined ? '—' : currencyFormatter.format(price),
+      valueDisplay: hidden ? '••••' : price === undefined || unavailable || failed || loading ? '—' : currencyFormatter.format(value),
+      allocationWidth: `${allocation === undefined ? 100 / assets.length : Math.max(0, allocation)}%`,
+      allocationDisplay: allocation === undefined ? '—' : `${allocation.toFixed(1)}%`,
+    };
+  });
   const change = preview ? 2.84 : undefined;
-  const completedCount = accountTransactions.filter(record => record.status === 'confirmed' || record.status === 'reverted').length;
-  const pendingCount = accountTransactions.filter(record => record.status === 'pending').length;
+  const completedCount = transactionCounts.completed;
+  const pendingCount = transactionCounts.pending;
+  const previousCompletedCount = useRef(completedCount);
   const notify = (message: string) => { setToast(message); clearTimeout(toastTimer.current); toastTimer.current = setTimeout(() => setToast(''), 4500); };
   const connect = () => { void openWallet(network, address ? 'Account' : 'Connect').catch(error => notify(errorMessage(error))); };
   const refresh = () => { setRefreshKey(value => value + 1); void quotes.refetch(); notify('Refreshing balances and market prices.'); };
@@ -86,7 +124,13 @@ setup
     if (connected && connectedNetwork) { setNetwork(connectedNetwork.key); setSendSymbol(''); }
   }, [wallet.chainId, wallet.namespace, wallet.evmAddress, wallet.bitcoinAddress]);
   useEffect(() => { if (!showTestnets && getNetwork(network).testnet && !address) setNetwork('ethereum'); }, [showTestnets, network, address]);
-  useEffect(() => { setRefreshKey(value => value + 1); }, [completedCount]);
+  useEffect(() => {
+    // The balance hook already fetches on mount; only journal changes need another read.
+    if (previousCompletedCount.current !== completedCount) {
+      previousCompletedCount.current = completedCount;
+      setRefreshKey(value => value + 1);
+    }
+  }, [completedCount]);
 
 .app-shell
   aside.sidebar
@@ -95,10 +139,10 @@ setup
       span BLOCK
       span.brand-period .
     .workspace-label
-      span Personal workspace
+      span Private Wallet
       span.workspace-key 01
     nav.primary-nav(aria-label="Main navigation")
-      each item in [{ key: 'overview', label: 'Overview', icon: 'grid' }, { key: 'activity', label: 'Transactions', icon: 'activity' }, { key: 'networks', label: 'Networks', icon: 'network' }, { key: 'product', label: 'Featured product', icon: 'cube' }, { key: 'checkout', label: 'Checkout', icon: 'bag' }, { key: 'testing', label: 'Testing settings', icon: 'settings' }] key item.key
+      each item in navigationItems key item.key
         fragment
           button(type="button" className={page === item.key ? 'active' : ''} aria-current={page === item.key ? 'page' : undefined} aria-label={item.label} title={item.label} onClick={() => navigatePage(item.key)})
             Icon(name={item.icon} size={17})
@@ -120,7 +164,7 @@ setup
           Icon(name="settings" size={16})
           span Preferences
         a(href="https://docs.reown.com/appkit/overview" target="_blank" rel="noopener noreferrer" aria-label="AppKit documentation")
-          Icon(name="arrow" size={15})
+          Icon(name="send" size={15})
   .main-shell
     header.topbar
       .breadcrumbs
@@ -165,30 +209,30 @@ setup
                     button.icon-button(type="button" aria-label="Refresh balances" onClick={refresh})
                       Icon(name="refresh" size={15} className={balances.loading ? 'spinning' : ''})
                 .portfolio-value
-                  h2 #{hidden ? '••••••' : totalKnown ? totalDisplay.split('.')[0] : address || preview ? '—' : money(0, currency).split('.')[0]}
-                    span.value-decimals #{hidden || !totalKnown || !totalDisplay.includes('.') ? '' : `.${totalDisplay.split('.')[1]}`}
+                  h2 #{hidden ? '••••••' : totalKnown ? totalWhole : address || preview ? '—' : currencyFormatter.format(0).split('.')[0]}
+                    span.value-decimals #{hidden || !totalKnown || totalFraction === undefined ? '' : `.${totalFraction}`}
                   if change !== undefined
                     fragment
                       .portfolio-change
-                        Icon(name="arrow" size={13})
+                        Icon(name="send" size={13})
                         strong +#{change.toFixed(2)}%
                         span past week
                   else
                     fragment
                       .portfolio-change.neutral
-                        span #{balances.loading ? 'Reading onchain balances…' : activeNetwork.testnet ? isDevServer ? 'Mainnet-equivalent prices · development' : 'Test assets · fiat valuation unavailable' : address ? 'Live onchain balances' : 'Connect to load your portfolio'}
-                PortfolioChart(preview={preview} total={total} hidden={hidden})
+                        span.hidden #{balances.loading ? 'Reading onchain balances…' : activeNetwork.testnet ? isDevServer ? 'Mainnet-equivalent prices · development' : 'Test assets · fiat valuation unavailable' : address ? 'Live onchain balances' : 'Connect to load your portfolio'}
+                PortfolioChart(preview={preview} hidden={hidden} network={network} address={unsupportedNetwork ? undefined : address})
                 .allocation-bar(aria-label="Portfolio allocation")
-                  each asset in assets key asset.symbol
+                  each asset in assetRows key asset.symbol
                     fragment
-                      span(style={{ backgroundColor: asset.color, width: `${total > 0 ? Math.max(0, Number(asset.amount) * (asset.price ?? 0) * (preview ? fiatRate ?? 0 : 1) / total * 100) : 100 / assets.length}%` }})
+                      span(style={{ backgroundColor: asset.color, width: asset.allocationWidth }})
                 .allocation-labels
-                  each asset in assets key asset.symbol
+                  each asset in assetRows key asset.symbol
                     fragment
                       span
                         i(style={{ backgroundColor: asset.color }})
                         | #{asset.symbol}
-                        strong #{total > 0 ? `${(Number(asset.amount) * (asset.price ?? 0) * (preview ? fiatRate ?? 0 : 1) / total * 100).toFixed(1)}%` : '—'}
+                        strong #{asset.allocationDisplay}
               section.assets-section(aria-labelledby="assets-heading")
                 .section-heading
                   .heading-label
@@ -201,7 +245,7 @@ setup
                     span PRICE / 24H
                     span HOLDINGS
                     span VALUE
-                  each asset in assets key asset.symbol
+                  each asset in assetRows key asset.symbol
                     fragment
                       button.asset-row(type="button" onClick={() => { void switchNetwork(asset.network, asset.symbol); setTab('send'); document.getElementById('transaction-heading')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }})
                         .asset-identity
@@ -210,14 +254,14 @@ setup
                             strong #{asset.name}
                             span #{asset.symbol}
                         .asset-price
-                          strong #{asset.price === undefined || (preview && fiatRate === undefined) ? '—' : money(asset.price * (preview ? fiatRate ?? 0 : 1), currency)}
+                          strong #{asset.priceDisplay}
                           span(className={asset.change !== undefined && asset.change < 0 ? 'negative' : 'positive'}) #{asset.change === undefined ? '—' : `${asset.change >= 0 ? '+' : ''}${asset.change.toFixed(2)}%`}
                         .asset-holdings
-                          strong(title={hidden ? undefined : asset.amount}) #{hidden ? '••••' : 'error' in asset && asset.error ? 'Unavailable' : !preview && (!address || unsupportedNetwork) ? '—' : 'loading' in asset && asset.loading ? '…' : compactBalance(asset.amount)}
+                          strong(title={hidden ? undefined : asset.amount}) #{asset.holdings}
                           span #{asset.symbol}
                         .asset-value
-                          strong #{hidden ? '••••' : asset.price === undefined || (preview && fiatRate === undefined) || ('error' in asset && asset.error) || ('loading' in asset && asset.loading) || (!preview && (!address || unsupportedNetwork)) ? '—' : money(Number(asset.amount) * asset.price * (preview ? fiatRate ?? 0 : 1), currency)}
-                          span.asset-mobile-holdings(title={hidden ? undefined : `${asset.amount} ${asset.symbol}`}) #{hidden ? '••••' : 'error' in asset && asset.error ? 'Unavailable' : !preview && (!address || unsupportedNetwork) ? '—' : 'loading' in asset && asset.loading ? '…' : `${compactBalance(asset.amount)} ${asset.symbol}`}
+                          strong #{asset.valueDisplay}
+                          span.asset-mobile-holdings(title={hidden ? undefined : `${asset.amount} ${asset.symbol}`}) #{asset.mobileHoldings}
                           if preview
                             fragment
                               svg.sparkline(viewBox="0 0 72 26" width="68" height="24" aria-hidden="true")
@@ -233,10 +277,10 @@ setup
                 h2#transaction-heading Transact
                 span.transaction-version V.01
               .transaction-tabs(role="tablist" aria-label="Transaction type")
-                each item in [{ key: 'send', label: 'Send', icon: 'arrow' }, { key: 'receive', label: 'Receive', icon: 'receive' }, { key: 'swap', label: 'Swap', icon: 'swap' }] key item.key
+                each item in transactionTabs key item.key
                   fragment
                     button(type="button" id={`tab-${item.key}`} role="tab" aria-selected={tab === item.key} aria-controls="transaction-content" tabIndex={tab === item.key ? 0 : -1} className={tab === item.key ? 'active' : ''} onClick={() => setTab(item.key)} onKeyDown={(event) => { if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') { event.preventDefault(); const items = ['send', 'receive', 'swap']; const next = items[(items.indexOf(tab) + (event.key === 'ArrowRight' ? 1 : 2)) % 3]!; setTab(next); document.getElementById(`tab-${next}`)?.focus(); } }})
-                      Icon(name={item.icon} size={14})
+                      Icon(name={item.icon} size={10})
                       span #{item.label}
               .transaction-network
                 span Network
@@ -246,7 +290,7 @@ setup
                     each item in visibleNetworks key item.key
                       fragment
                         option(value={item.key}) #{item.name}#{item.testnet ? ' · Testnet' : ''}
-                  Icon(name="down" size={13})
+                  Icon(name="chevron-down" size={8})
               #transaction-content(role="tabpanel" aria-labelledby={`tab-${tab}`})
                 if tab === 'send'
                   fragment
@@ -266,11 +310,11 @@ setup
               Activity(records={accountTransactions} preview={preview} onExpand={() => navigatePage('activity')})
           .workspace-metrics
             .workspace-metric
-              Icon(name="network" size={17})
+              Icon(name="globe" size={17})
               strong #{NETWORKS.length.toString().padStart(2, '0')}
               span Integrated networks
             .workspace-metric
-              Icon(name="shield" size={17})
+              Icon(name="shield-check-outline" size={17})
               strong Self custody
               span Always in your control
             .workspace-metric
@@ -312,9 +356,9 @@ setup
                   .network-card-actions
                     button.text-button(type="button" onClick={() => { void switchNetwork(item.key); navigatePage('overview'); }})
                       | Transact
-                      Icon(name="right" size={16})
+                      Icon(name="arrow-right" size={16})
                     a(href={item.chain.blockExplorers!.default.url} target="_blank" rel="noopener noreferrer" aria-label={`${item.name} block explorer`})
-                      Icon(name="arrow" size={16})
+                      Icon(name="send" size={16})
       footer.workspace-footer
         .footer-brand
           img(src="/mark.svg" alt="" width="13" height="13")

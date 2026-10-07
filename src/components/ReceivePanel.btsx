@@ -1,4 +1,4 @@
-import Icon from './Icon.btsx'
+import Icon from '../lib/icons/Icon.btsx'
 import { useQR } from '../hooks/use-qr'
 import { useCopy } from '../hooks/use-copy'
 import { getNetwork, type NetworkKey } from '../lib/appkit/networks'
@@ -26,7 +26,7 @@ setup
       code.receive-address #{address}
       button.primary-button(type="button" onClick={copy})
         span #{clipboard.copied ? 'Address copied' : 'Copy wallet address'}
-        Icon(name={clipboard.copied ? 'check' : 'copy'})
+        Icon(name={clipboard.copied ? 'check' : 'paste'})
       a.text-button(href={getAddressExplorerUrl(network, address)} target="_blank" rel="noopener noreferrer") View account on explorer ↗
       p.dialog-note Only send assets on #{getNetwork(network).name} to this address.
   else
@@ -38,4 +38,4 @@ setup
         p Connect a wallet to reveal your address and receive assets on #{getNetwork(network).name}.
       button.primary-button(type="button" onClick={connect})
         span Connect wallet to receive
-        Icon(name="right")
+        Icon(name="arrow-right")

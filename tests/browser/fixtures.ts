@@ -7,6 +7,10 @@ export const test = base.extend<{ publicServices: void }>({
     page.on('pageerror', error => errors.push(error.message))
     await page.route('**/appkit/v1/config**', route => route.fulfill({ json: { features: [] } }))
     await page.route('**/getWallets?**', route => route.fulfill({ json: { data: [], count: 0 } }))
+    await page.route('**/api/timeline?**', route => {
+      const url = new URL(route.request().url())
+      return route.fulfill({ json: { address: url.searchParams.get('address')!.toLowerCase(), network: url.searchParams.get('network'), events: [], updated: Date.now(), since: Date.now() - 365 * 86_400_000, partial: false } })
+    })
     await page.route('**/api/market?**', route => {
       const currency = new URL(route.request().url()).searchParams.get('currency') ?? 'USD'
       const rate = ({ USD: 1, PHP: 56, EUR: 0.9, GBP: 0.8, JPY: 150, AUD: 1.5, CAD: 1.4, SGD: 1.3 } as Record<string, number>)[currency]

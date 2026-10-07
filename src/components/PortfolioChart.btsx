@@ -1,54 +1,92 @@
-import { useState } from 'octane'
-import { money } from '../lib/amounts'
+import { useRef, useState } from 'octane'
+import { useWalletTimeline } from '../hooks/use-wallet-timeline'
+import { TIMELINE_PERIODS, timelinePoints, timelinePath, type TimelinePeriod } from '../lib/wallet-timeline'
+import type { NetworkKey } from '../lib/appkit/networks'
 module
-  const chartPaths: Record<string, string> = {
-    '1D': 'M0 126L16 134 29 114 47 121 65 99 81 115 97 89 117 105 136 92 151 103 171 83 188 94 203 60 220 68 236 50 253 60 269 71 287 59 303 66 320 54 338 75 355 49 372 53 387 32 405 46 422 27 438 38 455 26 473 44 489 19 506 26 522 15 540 24 554 6 572 15 590 8 607 18 626 6 644 13 660 4',
-    '1W': 'M0 147L22 139 44 150 65 127 88 132 109 100 132 114 154 101 176 116 198 90 220 102 242 82 264 92 286 72 308 74 330 93 352 81 374 98 396 69 418 71 440 50 462 58 484 38 506 52 528 31 550 38 572 16 594 29 616 12 638 19 660 4',
-    '1M': 'M0 155L25 145 50 161 75 135 100 129 125 154 150 133 175 111 200 116 225 90 250 108 275 127 300 104 325 115 350 90 375 67 400 78 425 49 450 53 475 71 500 42 525 51 550 32 575 43 600 20 625 27 660 4',
-    '1Y': 'M0 163L30 151 60 161 90 133 120 143 150 101 180 116 210 134 240 100 270 108 300 84 330 105 360 77 390 86 420 58 450 71 480 40 510 64 540 38 570 45 600 20 630 31 660 4',
-  };
-  const chartLabels: Record<string, string[]> = { '1D': ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00'], '1W': ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'], '1M': ['01', '06', '11', '16', '21', '26'], '1Y': ['JAN', 'MAR', 'MAY', 'JUL', 'SEP', 'NOV'] };
-props { preview, total, hidden }: { preview: boolean; total: number; hidden: boolean }
+  const series = [{ key: 'total' as const, label: 'Total activity', color: '#439cf4' }, { key: 'sent' as const, label: 'Sent', color: '#ff694f' }, { key: 'received' as const, label: 'Received', color: '#23c88a' }];
+props { preview, hidden, network, address }: { preview: boolean; hidden: boolean; network: NetworkKey; address?: string }
 setup
-  const [period, setPeriod] = useState('1W');
-  const [hover, setHover] = useState(false);
+  const [period, setPeriod] = useState<TimelinePeriod>('1W');
+  const [hoverIndex, setHoverIndex] = useState<number | undefined>(undefined);
+  const referenceTime = useRef(Date.now());
+  const timeline = useWalletTimeline(network, preview ? undefined : address);
+  const end = timeline.data?.updated ?? referenceTime.current;
+  const previewEvents = Array.from({ length: 120 }, (_, index) => ({ hash: `preview-${index}`, timestamp: end - (120 - index) * 6 * 3_600_000, received: index % 3 !== 0, sent: index % 3 === 0 }));
+  const points = timelinePoints(preview ? previewEvents : timeline.data?.events ?? [], period, end);
+  const latest = points[points.length - 1]!;
+  const maximum = Math.max(1, latest.total);
+  const hoverX = (hoverIndex ?? 32) / 32 * 660;
+  const hoverPercent = Math.max(18, Math.min(82, (hoverIndex ?? 32) / 32 * 100));
+  const hovered = hoverIndex === undefined ? undefined : points[hoverIndex];
+  const formatDate = (timestamp: number) => new Date(timestamp).toLocaleString('en-US', period === '1D' ? { hour: 'numeric', minute: '2-digit' } : { month: 'short', day: 'numeric' });
+  const available = preview || Boolean(timeline.data);
+  const moveHover = (event: PointerEvent) => { const rect = (event.currentTarget as HTMLElement).getBoundingClientRect(); setHoverIndex(Math.max(0, Math.min(32, Math.round((event.clientX - rect.left) / rect.width * 32)))); };
+  const keyboardHover = (event: KeyboardEvent) => {
+    if (['ArrowLeft', 'ArrowRight', 'Home', 'End', 'Escape'].includes(event.key)) {
+      event.preventDefault();
+      setHoverIndex(event.key === 'Escape' ? undefined : event.key === 'Home' ? 0 : event.key === 'End' ? 32 : Math.max(0, Math.min(32, (hoverIndex ?? 32) + (event.key === 'ArrowLeft' ? -1 : 1))));
+    }
+  };
 
-.chart-section
+.chart-section.wallet-timeline
   .chart-toolbar
     .chart-legend
-      span.legend-dot
-      span Portfolio value
+      span Wallet timeline
       if preview
         fragment
-          span.chart-preview Illustrative performance
+          span.chart-preview Illustrative activity
     .periods(aria-label="Chart period")
-      each item in ['1D', '1W', '1M', '1Y'] key item
+      each item in TIMELINE_PERIODS key item
         fragment
-          button(type="button" className={period === item ? 'active' : ''} aria-pressed={period === item} onClick={() => setPeriod(item)}) #{item}
-  if preview
+          button(type="button" className={period === item ? 'active' : ''} aria-pressed={period === item} onClick={() => { setPeriod(item); setHoverIndex(undefined); }}) #{item}
+  if available
     fragment
-      .chart-plot(onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)})
-        .chart-axis
-          span $26k
-          span $23k
-          span $20k
-        svg.portfolio-chart(viewBox="0 0 700 210" preserveAspectRatio="none" role="img" aria-label={`Illustrative portfolio performance over ${period}`})
-          path.chart-grid(d="M0 35H680M0 100H680M0 165H680")
-          path.chart-line(d={chartPaths[period]} transform="translate(0 26)")
-          circle.chart-end(cx="660" cy="30" r="4")
-          if hover && !hidden
-            fragment
-              path.chart-crosshair(d="M660 0v185")
-        if hover && !hidden
+      .timeline-metrics
+        each item in series key item.key
           fragment
-            .chart-tooltip #{money(total)}
-        .chart-dates
-          each label in chartLabels[period] key label
+            .timeline-metric
+              .timeline-metric-label
+                span.timeline-dot(style={{ backgroundColor: item.color }})
+                span #{item.label}
+              strong #{hidden ? '•••' : latest[item.key].toLocaleString('en-US')}
+      .chart-plot.timeline-plot(tabIndex={0} role="group" aria-label="Wallet activity timeline. Use left and right arrow keys to explore dates." onPointerMove={moveHover} onPointerLeave={() => setHoverIndex(undefined)} onFocus={() => setHoverIndex(32)} onBlur={() => setHoverIndex(undefined)} onKeyDown={keyboardHover})
+        svg.portfolio-chart(viewBox="0 0 660 200" preserveAspectRatio="none" role="img" aria-label={`${preview ? 'Illustrative' : 'Onchain'} cumulative wallet activity over ${period}: ${hidden ? 'counts hidden' : `${latest.total} transactions, ${latest.received} received, ${latest.sent} sent`}`})
+          path.timeline-area(d={`${timelinePath(points, 'received', maximum)} L660 194 L0 194 Z`})
+          each item in series key item.key
             fragment
-              span #{label}
+              path.chart-line(d={timelinePath(points, item.key, maximum)} style={{ stroke: item.color }})
+              circle.chart-end(cx="660" cy={174 - latest[item.key] / maximum * 150} r="3.5" style={{ fill: item.color }})
+          if hovered && !hidden
+            fragment
+              path.chart-crosshair(d={`M${hoverX} 12v176`})
+              each item in series key item.key
+                fragment
+                  circle(cx={hoverX} cy={174 - hovered[item.key] / maximum * 150} r="4" fill={item.color} stroke="var(--panel)" strokeWidth="2")
+        if hovered && !hidden
+          fragment
+            .chart-tooltip.timeline-tooltip(style={{ left: `${hoverPercent}%` }} role="status")
+              strong #{new Date(hovered.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+              each item in series key item.key
+                fragment
+                  span
+                    i.timeline-dot(style={{ backgroundColor: item.color }})
+                    | #{item.label}
+                    b #{hovered[item.key]}
+      .chart-dates.timeline-dates
+        each index in [0, 8, 16, 24, 32] key index
+          fragment
+            span #{formatDate(points[index]!.timestamp)}
+      .timeline-source(aria-live="polite")
+        if preview
+          fragment
+            span Demo activity · connect your wallet for its onchain timeline.
+      p.timeline-note.hidden Counts accumulate from the start of the selected period. A hash counts once; self-transfers appear in both Sent and Received. Sent includes reverted attempts. Internal transfers and NFTs are excluded.
   else
     fragment
-      .chart-empty
+      .chart-empty(role="status")
         .chart-empty-line
-        p Your current portfolio. Live onchain.
-        span Historical performance is unavailable in this workspace.
+        p #{network === 'bitcoin' ? 'Bitcoin timeline is unavailable.' : timeline.loading ? 'Reading your wallet’s timeline…' : 'Wallet timeline unavailable.'}
+        span #{network === 'bitcoin' ? 'Choose an EVM network to explore Etherscan activity.' : timeline.error ?? 'Connect your wallet to explore its activity.'}
+        if timeline.error && network !== 'bitcoin'
+          fragment
+            button.text-button(type="button" onClick={timeline.refetch}) Retry history

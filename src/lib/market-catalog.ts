@@ -10,6 +10,7 @@ export const FIAT_CURRENCIES = ['USD', 'PHP', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD',
 export type FiatCurrency = typeof FIAT_CURRENCIES[number]
 export const isFiatCurrency = (value: unknown): value is FiatCurrency => FIAT_CURRENCIES.some(currency => currency === value)
 export const QUOTE_MAX_AGE = 120_000
+export const QUOTE_REFRESH_MARGIN = 15_000
 export interface CryptoQuote { symbol: string; marketId: number; price: number; change?: number; updated: number }
 export interface MarketSnapshot {
   data: CryptoQuote[]

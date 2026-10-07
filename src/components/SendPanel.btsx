@@ -1,5 +1,5 @@
 import { useState } from 'octane'
-import Icon from './Icon.btsx'
+import Icon from '../lib/icons/Icon.btsx'
 import TokenIcon from './TokenIcon.btsx'
 import { useSend } from '../hooks/use-send'
 import { getTokens } from '../lib/appkit/tokens'
@@ -52,7 +52,7 @@ setup
           each item in tokens key item.symbol
             fragment
               option(value={item.symbol}) #{item.symbol}
-        Icon(name="down" size={13})
+        Icon(name="chevron-down" size={8})
     .amount-meta
       span#amount-conversion #{estimatedFiat === undefined || !Number.isFinite(estimatedFiat) ? 'Enter an amount to get started' : `≈ ${money(estimatedFiat, currency)} ${currency}`}
       button.unit-button(type="button" onClick={() => { setUnit(unit === 'fiat' ? 'token' : 'fiat'); setAmount(''); }} disabled={tx.busy || !price})
@@ -65,7 +65,7 @@ setup
     .recipient-row
       input#recipient(type="text" placeholder={network === 'bitcoin' ? 'bc1… Bitcoin address' : '0x… Wallet address'} autoComplete="off" spellCheck={false} value={to} onInput={(event) => setTo(event.currentTarget.value)} disabled={tx.busy})
       button.icon-button(type="button" aria-label="Paste recipient address" onClick={paste} disabled={tx.busy})
-        Icon(name="copy" size={16})
+        Icon(name="paste" size={16})
   .execution-details
     .detail-row
       span Network fee
@@ -73,7 +73,7 @@ setup
     .detail-row
       span Execution
       span.wallet-signed
-        Icon(name="shield" size={13})
+        Icon(name="shield-check-outline" size={13})
         | Wallet signed
   if tx.error || inputError
     fragment
@@ -82,14 +82,14 @@ setup
     fragment
       button.primary-button(type="button" disabled={!amount || !to || tx.busy} onClick={review})
         span #{tx.phase === 'preparing' ? 'Preparing transaction…' : 'Review transaction'}
-        Icon(name={tx.phase === 'preparing' ? 'refresh' : 'right'} size={18} className={tx.phase === 'preparing' ? 'spinning' : ''})
+        Icon(name={tx.phase === 'preparing' ? 'refresh' : 'arrow-right'} size={18} className={tx.phase === 'preparing' ? 'spinning' : ''})
   else
     fragment
       button.primary-button(type="button" onClick={connect})
         span Connect wallet to send
-        Icon(name="right" size={18})
+        Icon(name="arrow-right" size={18})
   p.transaction-note
-    Icon(name="shield" size={13})
+    Icon(name="shield-check-outline" size={13})
     | Your keys stay in your wallet.
   if tx.phase === 'review' || tx.phase === 'signing'
     fragment
@@ -127,5 +127,5 @@ setup
         p Follow confirmation in your activity below.
         a(href={tx.hash ? getTransactionExplorerUrl(network, tx.hash) ?? '#' : '#'} target="_blank" rel="noopener noreferrer")
           | View on explorer
-          Icon(name="arrow" size={13})
+          Icon(name="send" size={13})
         button.text-button(type="button" onClick={() => { tx.reset(); setAmount(''); }}) New transaction

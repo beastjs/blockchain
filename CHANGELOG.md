@@ -6,6 +6,10 @@ All notable changes to `blockchain` will be recorded here.
 
 ### Added
 
+- UI icons now use the generated `src/lib/icons` SVG library across navigation, wallet controls, transfers, checkout, and product views. Remaining legacy shapes are SVG sources in the shared library.
+
+- Reference-inspired smooth wallet timeline with cumulative Total activity, Sent, and Received curves, period selection, date hover/keyboard tooltips, and Etherscan V2 history from the connected EVM address. Includes a private server endpoint, pagination, deduplication, caching, API request pacing, partial-history labels, and retry states.
+
 - Temporary `/settings` page for saved EVM relay/destination addresses, read-only three-second block/receipt monitoring, native and supported ERC-20 activity, pending hash tracking, and success/revert states.
 
 - `/product`, a featured turbofan engine with a lazily loaded 3D viewer, orbit/zoom controls, camera presets, auto-rotation, studio background switching, fullscreen, loading/retry states, GLB download, and original creator/license attribution.
@@ -21,6 +25,10 @@ All notable changes to `blockchain` will be recorded here.
 - Unit and browser tests, including mocked wallet execution and viewport verification.
 
 ### Fixed
+
+- Market polling follows upstream quote and FX expiry, and server caches refresh prices approaching expiry, preventing fresh-looking responses from losing portfolio valuations seconds later.
+
+- Workspace shell reuses currency formatters and transaction summaries, computes asset display values once, hoists static navigation, and avoids restarting balance reads on mount.
 
 - Network labels, token selection, and balance reads follow the connected provider's chain. App selection switches the wallet; rejected switches preserve the actual network, and external changes invalidate open reviews.
 - Token quantities remain visible without prices and on compact layouts; loading balances and tiny holdings no longer appear as zero. Market and FX failures are handled independently.

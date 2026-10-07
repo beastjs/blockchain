@@ -1,5 +1,5 @@
 import { useState } from 'octane'
-import Icon from './Icon.btsx'
+import Icon from '../lib/icons/Icon.btsx'
 import TokenIcon from './TokenIcon.btsx'
 import { getNetwork } from '../lib/appkit/networks'
 import { getTransactionExplorerUrl } from '../lib/explorer'
@@ -22,7 +22,7 @@ setup
 section.activity-section(aria-labelledby="activity-heading")
   .section-heading
     .heading-label
-      Icon(name="activity" size={18})
+      Icon(name="list" size={18})
       h2#activity-heading #{expanded ? 'Transaction activity' : 'Recent activity'}
       span.section-count #{preview ? '03' : records.length.toString().padStart(2, '0')}
     if expanded
@@ -34,7 +34,7 @@ section.activity-section(aria-labelledby="activity-heading")
       fragment
         button.text-button(type="button" onClick={onExpand})
           | View all
-          Icon(name="arrow" size={14})
+          Icon(name="list" size={12})
   .activity-toolbar
     .activity-filters(aria-label="Filter transactions")
       each item in [{ key: 'all', label: 'All transactions' }, { key: 'confirmed', label: 'Confirmed' }, { key: 'pending', label: 'Pending' }, { key: 'reverted', label: 'Reverted' }] key item.key
@@ -56,7 +56,7 @@ section.activity-section(aria-labelledby="activity-heading")
             .activity-row
               .transaction-identity
                 span.transaction-direction
-                  Icon(name={row.label === 'Received' ? 'receive' : 'arrow'} size={16})
+                  Icon(name={row.label === 'Received' ? 'receive' : 'send'} size={16})
                 .transaction-label
                   strong #{row.label} #{row.symbol}
                   span #{row.to} · #{row.time}
@@ -73,7 +73,7 @@ section.activity-section(aria-labelledby="activity-heading")
             a.activity-row(href={getTransactionExplorerUrl(row.network, row.hash) ?? '#'} target="_blank" rel="noopener noreferrer")
               .transaction-identity
                 span.transaction-direction
-                  Icon(name="arrow" size={16})
+                  Icon(name="send" size={16})
                 .transaction-label
                   strong Sent #{row.symbol}
                   span #{truncateAddress(row.to)} · #{new Date(row.created).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
@@ -86,11 +86,11 @@ section.activity-section(aria-labelledby="activity-heading")
     if (preview && samples.length === 0) || (!preview && shown.length === 0)
       fragment
         .activity-empty
-          Icon(name="activity" size={24})
+          Icon(name="list" size={24})
           p #{query || filter !== 'all' ? 'No transactions match this filter.' : 'Your first transaction starts the story.'}
           span #{query || filter !== 'all' ? 'Try a different search or status.' : 'Transfers made here will appear with their onchain status.'}
   .activity-foot
     span #{preview ? 'Illustrative transactions · preview data' : 'Transfers made in this workspace · stored on this device'}
     span
-      Icon(name="shield" size={12})
+      Icon(name="shield-check-outline" size={12})
       | #{preview ? 'Explore the workspace' : 'Verified onchain receipts'}

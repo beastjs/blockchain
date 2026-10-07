@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'octane'
 import type { ModelViewerElement } from '@google/model-viewer'
-import Icon from '../components/Icon.btsx'
+import Icon from '../lib/icons/Icon.btsx'
 import { PRODUCT_MODEL_URL, PRODUCT_VIEWS } from '../lib/product-model'
 import '../product.css'
 setup
@@ -187,13 +187,13 @@ setup
       a.product-download(href={PRODUCT_MODEL_URL} download="turbofan-engine.glb")
         Icon(name="receive" size={16})
         span Download 3D model
-        Icon(name="right" size={16})
+        Icon(name="arrow-right" size={16})
       p.product-download-note GLB format · Ready for your next project
       .product-attribution
         span CREATED BY
         a(href="https://sketchfab.com/blenderbirb" target="_blank" rel="noopener noreferrer")
           | blenderbirb
-          Icon(name="arrow" size={11})
+          Icon(name="send" size={11})
         p
           a(href="https://sketchfab.com/3d-models/turbine-turbofan-engine-jet-engine-74c6aceed86b4a41aaad3b93afc3e262" target="_blank" rel="noopener noreferrer") Original model
           |  · 

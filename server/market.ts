@@ -1,4 +1,4 @@
-import { MARKET_ASSETS, QUOTE_MAX_AGE, isFiatCurrency, type CryptoQuote, type FiatCurrency, type MarketSnapshot } from '../src/lib/market-catalog'
+import { MARKET_ASSETS, QUOTE_MAX_AGE, QUOTE_REFRESH_MARGIN, isFiatCurrency, type CryptoQuote, type FiatCurrency, type MarketSnapshot } from '../src/lib/market-catalog'
 
 export const MARKET_CACHE_TTL = 60_000
 const RETRY_DELAY = 15_000
@@ -38,12 +38,12 @@ export function createMarketService({
     if (!body || Number(object(body.status)?.error_code) !== 0) throw new MarketError('CoinMarketCap returned an invalid response.')
     return body.data
   }
-  function cached<T>(key: string, load: () => Promise<T>): Promise<T> {
+  function cached<T>(key: string, load: () => Promise<T>, usable: (value: T) => boolean = () => true): Promise<T> {
     const entry = cache.get(key) ?? {}
     cache.set(key, entry)
     if (entry.inFlight) return entry.inFlight as Promise<T>
     if (entry.failure && now() - entry.failure.time >= 0 && now() - entry.failure.time < RETRY_DELAY) return Promise.reject(entry.failure.error)
-    if (entry.fetchedAt !== undefined && now() - entry.fetchedAt >= 0 && now() - entry.fetchedAt < MARKET_CACHE_TTL) return Promise.resolve(entry.value as T)
+    if (entry.fetchedAt !== undefined && now() - entry.fetchedAt >= 0 && now() - entry.fetchedAt < MARKET_CACHE_TTL && usable(entry.value as T)) return Promise.resolve(entry.value as T)
     entry.inFlight = Promise.resolve().then(load).then(value => {
       entry.value = value
       entry.fetchedAt = now()
@@ -68,7 +68,7 @@ export function createMarketService({
     })
     if (!quotes.length) throw new MarketError('CoinMarketCap returned no fresh crypto quotes.')
     return quotes
-  })
+  }, quotes => quotes.every(quote => now() - quote.updated < QUOTE_MAX_AGE - QUOTE_REFRESH_MARGIN))
   const fiatRate = (currency: FiatCurrency) => currency === 'USD'
     ? Promise.resolve({ rate: 1, fxUpdated: now() })
     : cached(`fx:${currency}`, async () => {
@@ -79,7 +79,7 @@ export function createMarketService({
       const fxUpdated = timestamp(quote?.last_updated)
       if (!positive(quote?.price) || fxUpdated === undefined) throw new MarketError('CoinMarketCap returned no fresh fiat exchange rate.')
       return { rate: quote.price, fxUpdated }
-    })
+    }, rate => now() - rate.fxUpdated < QUOTE_MAX_AGE - QUOTE_REFRESH_MARGIN)
   return {
     async getSnapshot(currency: FiatCurrency): Promise<MarketSnapshot> {
       const [crypto, fiat] = await Promise.allSettled([cryptoQuotes(), fiatRate(currency)])

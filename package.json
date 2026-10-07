@@ -11,7 +11,9 @@
     "typecheck": "tsrx-tsc --noEmit",
     "check": "bun run typecheck && bun run test && bun run build && bun run test:browser",
     "test": "bun test ./tests/unit",
-    "test:browser": "playwright test"
+    "test:browser": "playwright test",
+    "icons:build": "bun scripts/build-icons.ts --svg src/lib/icons/svg --out src/lib/icons/icons.ts",
+    "icons:check": "bun scripts/build-icons.ts --svg src/lib/icons/svg --out src/lib/icons/icons.ts --check"
   },
   "dependencies": {
     "@google/model-viewer": "^4.3.1",
@@ -40,6 +42,7 @@
     "@types/bun": "^1.4.2",
     "@types/node": "^26.2.0",
     "@types/qrcode": "^1.5.6",
+    "svgo": "^4.1.0",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3"
   },

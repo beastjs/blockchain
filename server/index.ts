@@ -1,13 +1,16 @@
 import { resolve, sep } from 'node:path'
 import { createMarketHandler } from './market'
+import { createTimelineHandler } from './timeline'
 
 const handleMarket = createMarketHandler()
+const handleTimeline = createTimelineHandler()
 const root = resolve(import.meta.dir, '../dist')
 const server = Bun.serve({
   port: Number(process.env.PORT ?? 3000),
   hostname: process.env.HOST ?? '127.0.0.1',
   async fetch(request) {
     const url = new URL(request.url)
+    if (url.pathname === '/api/timeline') return handleTimeline(request)
     if (url.pathname.startsWith('/api/')) return handleMarket(request)
     if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method not allowed', { status: 405 })
     let path: string
