@@ -136,8 +136,7 @@ setup
   aside.sidebar
     a.brand(href="/" aria-label="BLOCK home" onClick={(event) => { event.preventDefault(); navigatePage('overview'); }})
       img(src="/mark.svg" alt="" width="29" height="29")
-      span BLOCK
-      span.brand-period .
+      span BLOC
     .workspace-label
       span Private Wallet
       span.workspace-key 01
@@ -353,7 +352,7 @@ setup
                     TokenIcon(symbol={item.short})
                     span.network-type #{item.testnet ? 'TESTNET' : item.namespace === 'bip122' ? 'BITCOIN' : 'EVM'}
                   h2 #{item.name}
-                  p #{item.testnet ? 'Test your workflow with test assets.' : item.key === 'bitcoin' ? 'Native Bitcoin transfers and onchain confirmations.' : `Native ${item.nativeSymbol}, USDC${item.key === 'sepolia' ? '' : ' and USDT'} transfers.`}
+                  p #{item.testnet ? 'Test your workflow with test assets.' : item.key === 'bitcoin' ? 'Native Bitcoin transfers and onchain confirmations.' : `Native ${item.nativeSymbol}, USDC${item.key === 'ethereum' ? '' : ' and USDT'} transfers.`}
                   .network-card-actions
                     button.text-button(type="button" onClick={() => { void switchNetwork(item.key); navigatePage('overview'); }})
                       | Transact

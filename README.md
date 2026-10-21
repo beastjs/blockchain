@@ -1,6 +1,8 @@
-# BLOCK — the onchain terminal
+# BLOC — relay and onchain terminal
 
 A Beast/Octane transaction workspace, built on the AppKit integration from `~/Code/ftsb`. Dark graphite surfaces, lime accents, local Inter/IBM Plex Mono fonts, and a responsive layout with no gradients.
+
+![Mural](public/blockchain-ss.png)
 
 ```sh
 bun install
@@ -63,7 +65,6 @@ Visit `/checkout` or select **Checkout** in the sidebar for the example storefro
 Visit `/product` or select **Featured product** to explore `src/lib/scene/turbine__turbofan_engine__jet_engine.glb`. The [model-viewer](https://modelviewer.dev/) renderer is loaded only when the page opens, with orbit, zoom, camera presets, optional auto-rotation, fullscreen where supported, studio background switching, error recovery, and a GLB download. The source file is emitted as a bundled asset for both development and production. The model is **Turbine | Turbofan Engine | Jet Engine** by [blenderbirb](https://sketchfab.com/blenderbirb), from [Sketchfab](https://sketchfab.com/3d-models/turbine-turbofan-engine-jet-engine-74c6aceed86b4a41aaad3b93afc3e262), licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Attribution comes from the GLB's embedded metadata; the model is displayed without modification.
 
 Visit `/settings` or select **Testing settings** for temporary relay/destination monitoring. Save two different EVM addresses and choose a network (Sepolia by default), then start monitoring. Settings persist locally; monitoring runs while this page is open and stops on navigation/reload. It discovers native transfers and supported USDC/USDT Transfer logs starting at the current block, tracks matching pending transfers from the local journal, and accepts external transfer hashes. Status refreshes every three seconds: received means RPC observation, processing means waiting for a receipt, completed means a successful included receipt, and failed means a revert. This does not configure a forwarding service or report its internal processing; it does not sign transactions, fetch historical activity, cover Bitcoin/internal native calls, or guarantee finality. RPC outages are shown with automatic retry.
-
 
 ## Wallet activity timeline
 

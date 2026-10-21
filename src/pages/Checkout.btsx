@@ -195,6 +195,13 @@ setup
                     strong Express delivery
                     span 1–2 business days
                   strong.choice-price $15.00
+
+                label.checkout-choice(className={delivery === 'waived' ? 'selected' : ''})
+                  input(type="radio" name="delivery" value="waived" checked={delivery === 'waived'} onChange={() => setDelivery('waived')})
+                  .choice-label
+                    strong Waive Shipping Fee
+                    span 1–2 business days
+                  strong.choice-price $0.00
             section.checkout-form-section.payment-section(aria-labelledby="payment-heading")
               .checkout-section-heading
                 span.section-number 02
